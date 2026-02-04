@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "MalExtension - Extension Threat Detector",
+  "name": "Extension Scanner - Extension Threat Detector",
   "version": "0.1.0",
   "description": "Detects potentially malicious Chrome extensions installed in your browser",
   "permissions": ["management", "storage", "alarms", "notifications"],
