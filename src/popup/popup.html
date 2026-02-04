@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>MalExtension</title>
+  </head>
+  <body>
+    <div class="popup">
+      <header class="header">
+        <h1 class="title">MalExtension</h1>
+        <span class="scan-time" id="scan-time">--</span>
+      </header>
+
+      <div class="summary" id="summary">
+        <div class="badge badge-red" id="badge-red">
+          <span class="badge-count">0</span>
+          <span class="badge-label">High Risk</span>
+        </div>
+        <div class="badge badge-yellow" id="badge-yellow">
+          <span class="badge-count">0</span>
+          <span class="badge-label">Medium Risk</span>
+        </div>
+        <div class="badge badge-green" id="badge-green">
+          <span class="badge-count">0</span>
+          <span class="badge-label">Safe</span>
+        </div>
+      </div>
+
+      <div class="threats" id="threats">
+        <div class="loading" id="loading">Loading scan results...</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-scan" id="btn-scan">Scan Now</button>
+        <button class="btn btn-dashboard" id="btn-dashboard">
+          Detailed Report
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="popup.ts"></script>
+  </body>
+</html>

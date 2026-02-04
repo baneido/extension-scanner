@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="dashboard.css" />
+    <title>MalExtension - Dashboard</title>
+  </head>
+  <body>
+    <div class="dashboard">
+      <header class="header">
+        <div class="header-left">
+          <h1 class="title">MalExtension Dashboard</h1>
+          <span class="scan-time" id="scan-time">--</span>
+        </div>
+        <button class="btn btn-scan" id="btn-scan">Scan Now</button>
+      </header>
+
+      <div class="summary-bar" id="summary-bar">
+        <div class="summary-item summary-total">
+          <span class="summary-count" id="count-total">0</span>
+          <span class="summary-label">Total</span>
+        </div>
+        <div class="summary-item summary-red">
+          <span class="summary-count" id="count-red">0</span>
+          <span class="summary-label">High Risk</span>
+        </div>
+        <div class="summary-item summary-yellow">
+          <span class="summary-count" id="count-yellow">0</span>
+          <span class="summary-label">Medium Risk</span>
+        </div>
+        <div class="summary-item summary-green">
+          <span class="summary-count" id="count-green">0</span>
+          <span class="summary-label">Safe</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="red">High Risk</button>
+          <button class="filter-btn" data-filter="yellow">Medium Risk</button>
+          <button class="filter-btn" data-filter="green">Safe</button>
+        </div>
+        <input
+          class="search-input"
+          id="search-input"
+          type="text"
+          placeholder="Search by extension name..."
+        />
+      </div>
+
+      <div class="extensions-list" id="extensions-list">
+        <div class="loading" id="loading">Loading scan results...</div>
+      </div>
+
+      <div class="settings-section" id="settings-section">
+        <h2 class="section-title">Settings</h2>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="pref-notify-red" checked />
+            Notify when high-risk extensions are detected
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="pref-notify-yellow" />
+            Notify when medium-risk extensions are detected
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="dashboard.ts"></script>
+  </body>
+</html>
