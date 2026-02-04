@@ -10,17 +10,27 @@ import {
 
 // ---- All listeners registered synchronously at top level (MV3 requirement) ----
 
+console.log("[ExtScanner] Service Worker loaded");
+
 // 1. On install/update: run initial scan and set up alarms
 chrome.runtime.onInstalled.addListener(async () => {
-  await initBlocklist();
-  await performScan();
+  console.log("[ExtScanner] onInstalled triggered");
+  try {
+    await initBlocklist();
+    console.log("[ExtScanner] Blocklist initialized");
+    await performScan();
+    console.log("[ExtScanner] Initial scan completed");
 
-  chrome.alarms.create("periodic-scan", {
-    periodInMinutes: SCAN_INTERVAL_MINUTES,
-  });
-  chrome.alarms.create("blocklist-update", {
-    periodInMinutes: BLOCKLIST_UPDATE_INTERVAL_MINUTES,
-  });
+    chrome.alarms.create("periodic-scan", {
+      periodInMinutes: SCAN_INTERVAL_MINUTES,
+    });
+    chrome.alarms.create("blocklist-update", {
+      periodInMinutes: BLOCKLIST_UPDATE_INTERVAL_MINUTES,
+    });
+    console.log("[ExtScanner] Alarms created");
+  } catch (error) {
+    console.error("[ExtScanner] onInstalled error:", error);
+  }
 });
 
 // 2. On browser startup: ensure alarms exist and blocklist is loaded
