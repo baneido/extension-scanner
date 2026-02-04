@@ -49,10 +49,16 @@ jobs:
           echo "Created: extension-scanner-v${{ steps.version.outputs.version }}.zip"
           ls -la *.zip
 
+      - name: Calculate checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(sha256sum extension-scanner-v${{ steps.version.outputs.version }}.zip)
+          echo "sha256=$CHECKSUM" >> $GITHUB_OUTPUT
+
       - name: Generate release notes
         id: release_notes
         run: |
-          cat << 'EOF' > release_notes.md
+          cat << EOF > release_notes.md
           ## Extension Scanner v${{ steps.version.outputs.version }}
           
           ### Installation
@@ -61,9 +67,9 @@ jobs:
           *Coming soon*
           
           #### Manual Installation (Developer Mode)
-          1. Download `extension-scanner-v${{ steps.version.outputs.version }}.zip` from the assets below
+          1. Download \`extension-scanner-v${{ steps.version.outputs.version }}.zip\` from the assets below
           2. Extract the ZIP file to a folder
-          3. Open Chrome and navigate to `chrome://extensions`
+          3. Open Chrome and navigate to \`chrome://extensions\`
           4. Enable "Developer mode" (toggle in top-right)
           5. Click "Load unpacked" and select the extracted folder
           
@@ -73,9 +79,9 @@ jobs:
           - Service worker, popup, and dashboard UI
           
           ### Checksums
-          ```
-          $(sha256sum extension-scanner-v${{ steps.version.outputs.version }}.zip)
-          ```
+          \`\`\`
+          ${{ steps.checksum.outputs.sha256 }}
+          \`\`\`
           EOF
 
       - name: Create GitHub Release
