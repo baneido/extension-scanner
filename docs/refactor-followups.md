@@ -21,11 +21,14 @@
 - **決定**: 修正する。ただし**ストア由来を素朴に除外しない**。検証で判明した通り、Chrome Web Store の全拡張は `clients2.google.com` を update URL に持つため、「update URL = clients2.google.com」では「本物の Google 製」を証明できず、ストア掲載の偽装マルウェアにバイパスを与えてしまう。
 - **実装**: `/^google\s/`・`/^chrome\s/` 偽装パターンを **`installType` が `normal`/`admin`(ストア/管理者由来)では抑制**し、`sideload`/`development`(オフストア=偽装の実ベクトル)でのみ +10 を付与。`installType` は Chrome が証明する provenance チャネルであり、不明値は非ストア扱い(fail-safe)。ストア掲載偽装はブロックリストで担保。`suspicious-patterns.ts`/`metadata.ts`、テスト更新。
 
-### F-4: ブロックリストの信頼モデル — 一部 ✅ / 一部 📝 / 一部 ⏸
+### F-4: ブロックリストの信頼モデル — 一部 ✅ / 一部 📝
 取得先の権威性は Q1 で解決済み。残る信頼モデルは3つに分けて判断した。
 1. **完全性検証(MD5/チェックサム): 📝 採用しない。** 公開チェックサム `current-list-meta-chksum.txt` は **CSV の MD5 であって消費する `current-list.json` のものではなく**、しかも同一オリジン由来。同一オリジンのハッシュは転送破損しか検出できず、上流侵害(本来の脅威)は検出できない。転送は既に TLS で保護され、破損は `parseBlocklist`(A-4)が拒否する。MD5 を足すと「暗号学的に検証済み」という**誤った安心感**を与える純負債。上流が `current-list.json` の SHA-256 を out-of-band で公開したら再検討。
 2. **多重ソース照合 / 単一ソースの重み低減: 📝 採用しない。** 既知悪性 ID(100点)の重みを下げる/ゲートするのはマルウェアスキャナにとって**偽陰性**(危険な方向)を生む。第二の権威的・CORS 対応 Chrome IOC フィードが現れたら、フラグを**ゲートせず信頼度を上げる**方向でのみ照合を検討。
-3. **防御の多層化(フォールバック実データ化 + 鮮度の可視化): ⏸ 計画済み・未実装。** 最も価値が高い(前ソースが無言で死んだ失敗モードの再発防止)。実装案: (3a) CI ビルド時に `current-list.json` を取得→`parseBlocklist` で検証→生成モジュールに焼き込み `FALLBACK_MALICIOUS_IDS` を非空にする(0件ならビルド失敗)。取得は floor であり優先順位は fresh-cache > live > stale-cache > snapshot のまま。(3b) ブロックリストの最終更新時刻 / 取得成否を保存し、popup/dashboard に表示。鮮度が閾値(推奨 7日)超過 or フォールバック時は警告表示(スキャンはブロックしない=fail-safe)。**未実装の理由**: (3a) はビルド時ネットワーク取得+生成ファイルのコミット、(3b) はストレージ・メッセージ・UI 配線で、いずれもブラウザ実機検証が要るため、人間レビュー付きの別 PR が適切。
+3. **防御の多層化(フォールバック実データ化 + 鮮度の可視化): ✅ 実装済み。** 最も価値が高い(前ソースが無言で死んだ失敗モードの再発防止)。
+   - **(3a) フォールバックのスナップショット化**: 決定案の「ビルド時 fetch」は**修正**し、**ハーメティックビルド**を優先。`npm run update-blocklist`(`scripts/update-blocklist-snapshot.mjs`)が権威ソースを取得・検証し `src/data/blocklist-snapshot.generated.ts`(3000 ID)を生成。`FALLBACK_MALICIOUS_IDS` がこれを読み非空化。0件なら書き込み拒否。週次の `update-blocklist.yml` ワークフローが PR を開いて更新(直接 main へは入れずレビュー経由)。本番ビルドはコミット済みファイルを読むだけ=ネットワーク非依存。
+   - **(3b) 鮮度・可用性の可視化**: 取得成否・件数・最終更新を `chrome.storage.local` に保存し、`GET_BLOCKLIST_STATUS` メッセージで公開。dashboard/popup に「Blocklist: N · updated X ago」を表示し、最終更新が7日超 or 直近 fetch 失敗なら警告表示。スキャンは鮮度でブロックしない(fail-safe)。
+   - **残課題(別件)**: 上流署名による真の改竄検出(1)、第二フィードによる corroboration(2)は上記の通り意図的に見送り。スナップショットの視覚表示と実機での通知/フォント/アイコン確認はブラウザ実機検証が必要。
 
 ---
 
