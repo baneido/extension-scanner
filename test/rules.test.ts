@@ -133,7 +133,7 @@ describe("hostPermissionsRule", () => {
     ]);
   });
 
-  it("flags wildcard subdomains and sensitive domains", () => {
+  it("flags wildcard subdomains and a sensitive subdomain (host-boundary match)", () => {
     const result = hostPermissionsRule.evaluate(
       makeExt({ hostPermissions: ["https://*.bankofamerica.com/*"] })
     );
@@ -146,30 +146,60 @@ describe("hostPermissionsRule", () => {
         severity: "medium",
       },
       {
-        ruleId: "host-sensitive-https://*.bankofamerica.com/*",
+        ruleId: "host-sensitive-domains",
         category: "host-permissions",
-        description:
-          'Requests access to sensitive domain: "https://*.bankofamerica.com/*"',
+        description: "Requests access to 1 sensitive domain(s): bankofamerica.com",
         score: 8,
         severity: "high",
       },
     ]);
   });
 
-  it("KNOWN BUG (Debt Map F-2): netflix.com matches the /x.com/ substring pattern", () => {
+  it("Debt Map F-2: does NOT flag coincidental substrings (netflix.com, burbankca.gov)", () => {
+    expect(
+      hostPermissionsRule.evaluate(
+        makeExt({ hostPermissions: ["https://netflix.com/*"] })
+      )
+    ).toEqual([]);
+    expect(
+      hostPermissionsRule.evaluate(
+        makeExt({ hostPermissions: ["https://burbankca.gov/*"] })
+      )
+    ).toEqual([]);
+  });
+
+  it("flags exact and subdomain sensitive hosts", () => {
+    for (const host of [
+      "https://paypal.com/*",
+      "https://login.paypal.com/*",
+      "https://*.paypal.com/*",
+      "https://x.com/*",
+    ]) {
+      const result = hostPermissionsRule.evaluate(
+        makeExt({ hostPermissions: [host] })
+      );
+      expect(result.some((r) => r.ruleId === "host-sensitive-domains")).toBe(true);
+    }
+  });
+
+  it("Debt Map F-2: caps the sensitive-domain score below <all_urls> (least-privilege ordering)", () => {
+    const fiveSensitive = [
+      "https://paypal.com/*",
+      "https://stripe.com/*",
+      "https://coinbase.com/*",
+      "https://github.com/*",
+      "https://outlook.com/*",
+    ];
     const result = hostPermissionsRule.evaluate(
-      makeExt({ hostPermissions: ["https://netflix.com/*"] })
+      makeExt({ hostPermissions: fiveSensitive })
     );
-    expect(result).toEqual([
-      {
-        ruleId: "host-sensitive-https://netflix.com/*",
-        category: "host-permissions",
-        description:
-          'Requests access to sensitive domain: "https://netflix.com/*"',
-        score: 8,
-        severity: "high",
-      },
-    ]);
+    const sensitive = result.find((r) => r.ruleId === "host-sensitive-domains")!;
+    expect(sensitive.score).toBe(24); // capped < 25
+    // <all_urls> alone (25) still outranks five specific sensitive hosts (24).
+    const allUrls = hostPermissionsRule.evaluate(
+      makeExt({ hostPermissions: ["<all_urls>"] })
+    );
+    expect(allUrls[0]!.score).toBeGreaterThan(sensitive.score);
   });
 
   it("returns nothing when there are no host permissions", () => {
