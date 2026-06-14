@@ -1,6 +1,19 @@
 import type { ScanResult } from "../shared/types";
 import { loadPreferences } from "../storage/store";
 
+/**
+ * Create a notification, logging failures instead of leaving the promise
+ * rejection unhandled (Debt Map B-5).
+ */
+function createNotification(
+  id: string,
+  options: chrome.notifications.NotificationOptions
+): void {
+  void chrome.notifications.create(id, options).catch((error) => {
+    console.error("[ExtScanner] Failed to create notification:", error);
+  });
+}
+
 export async function updateBadge(
   summary: ScanResult["summary"]
 ): Promise<void> {
@@ -29,7 +42,7 @@ export async function notifyNewThreats(
     if (prefs.customAllowlist.includes(ext.id)) continue;
 
     if (ext.riskLevel === "red" && prefs.notifyOnNewRedExtension) {
-      chrome.notifications.create(`threat-${ext.id}`, {
+      createNotification(`threat-${ext.id}`, {
         type: "basic",
         iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
         title: "High-Risk Extension Detected",
@@ -40,7 +53,7 @@ export async function notifyNewThreats(
       ext.riskLevel === "yellow" &&
       prefs.notifyOnNewYellowExtension
     ) {
-      chrome.notifications.create(`warning-${ext.id}`, {
+      createNotification(`warning-${ext.id}`, {
         type: "basic",
         iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
         title: "Suspicious Extension Detected",

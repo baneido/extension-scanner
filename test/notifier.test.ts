@@ -39,7 +39,8 @@ function result(exts: ScoredExtension[]): ScanResult {
 let createSpy: ReturnType<typeof vi.fn>;
 
 function installChrome(prefs: Record<string, unknown> = {}) {
-  createSpy = vi.fn();
+  // create() returns Promise<string> in MV3; mirror that so .catch() works.
+  createSpy = vi.fn(async () => "notification-id");
   (globalThis as any).chrome = {
     storage: {
       local: {
