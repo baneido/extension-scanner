@@ -7,6 +7,7 @@ import {
   SCAN_INTERVAL_MINUTES,
   BLOCKLIST_UPDATE_INTERVAL_MINUTES,
 } from "../shared/constants";
+import type { ExtMessage } from "../shared/messages";
 
 // ---- All listeners registered synchronously at top level (MV3 requirement) ----
 
@@ -78,7 +79,7 @@ chrome.management.onDisabled.addListener(() =>
 );
 
 // 5. Message handler for popup/dashboard
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ExtMessage, _sender, sendResponse) => {
   if (message.type === "GET_SCAN_RESULT") {
     loadScanResult()
       .then(sendResponse)

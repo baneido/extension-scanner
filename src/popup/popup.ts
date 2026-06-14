@@ -1,4 +1,8 @@
-import type { ScanResult, ScoredExtension } from "../shared/types";
+import type { ScoredExtension } from "../shared/types";
+import {
+  sendExtMessage,
+  type ScanResultResponse,
+} from "../shared/messages";
 import { timeAgo, largestIconUrl, escapeHtml } from "../shared/utils";
 
 // DOM elements
@@ -15,7 +19,7 @@ const btnDashboard = document.getElementById(
 /**
  * Render scan results to the popup UI
  */
-function renderScanResult(result: ScanResult | null): void {
+function renderScanResult(result: ScanResultResponse): void {
   if (!result) {
     threatsEl.innerHTML = `
       <div class="empty-state" role="status">
@@ -109,7 +113,7 @@ function addThreatItemHandlers(): void {
   threatItems.forEach((item) => {
     // Click handler
     item.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+      sendExtMessage({ type: "OPEN_DASHBOARD" });
     });
 
     // Keyboard handler (Enter/Space)
@@ -117,7 +121,7 @@ function addThreatItemHandlers(): void {
       const event = e as KeyboardEvent;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+        sendExtMessage({ type: "OPEN_DASHBOARD" });
       }
     });
   });
@@ -149,8 +153,8 @@ function setButtonLoading(loading: boolean): void {
 // Load initial scan result
 (async () => {
   try {
-    const result = await chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" });
-    renderScanResult(result as ScanResult | null);
+    const result = await sendExtMessage({ type: "GET_SCAN_RESULT" });
+    renderScanResult(result as ScanResultResponse);
   } catch (error) {
     console.error("[ExtScanner] Failed to load scan result:", error);
     renderScanResult(null);
@@ -161,8 +165,8 @@ function setButtonLoading(loading: boolean): void {
 btnScan.addEventListener("click", async () => {
   setButtonLoading(true);
   try {
-    const result = await chrome.runtime.sendMessage({ type: "RUN_SCAN" });
-    renderScanResult(result as ScanResult | null);
+    const result = await sendExtMessage({ type: "RUN_SCAN" });
+    renderScanResult(result as ScanResultResponse);
   } catch (error) {
     console.error("[ExtScanner] Scan failed:", error);
     renderScanResult(null);
@@ -173,7 +177,7 @@ btnScan.addEventListener("click", async () => {
 
 // Dashboard button
 btnDashboard.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+  sendExtMessage({ type: "OPEN_DASHBOARD" });
 });
 
 // Keyboard shortcuts
