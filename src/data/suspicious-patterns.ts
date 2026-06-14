@@ -6,22 +6,29 @@ export interface SuspiciousPattern {
   description: string;
   score: number;
   severity: RuleResult["severity"];
+  // "non-store": only apply for non-Web-Store installs. Brand-name
+  // impersonation is the real vector for sideloaded/dev extensions; genuine
+  // first-party extensions ship from the store, so applying it there only
+  // produces false positives (Debt Map F-3).
+  scope?: "non-store";
 }
 
 export const SUSPICIOUS_NAME_PATTERNS: SuspiciousPattern[] = [
   {
     id: "impersonation-google",
     regex: /^google\s/i,
-    description: "Name starts with 'Google' - possible impersonation",
+    description: "Name starts with 'Google' on a non-store install - possible impersonation",
     score: 10,
     severity: "high",
+    scope: "non-store",
   },
   {
     id: "impersonation-chrome",
     regex: /^chrome\s/i,
-    description: "Name starts with 'Chrome' - possible impersonation",
+    description: "Name starts with 'Chrome' on a non-store install - possible impersonation",
     score: 10,
     severity: "high",
+    scope: "non-store",
   },
   {
     id: "generic-vpn",

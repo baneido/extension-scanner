@@ -46,8 +46,15 @@ export const metadataRule: ScoringRule = {
       });
     }
 
-    // Suspicious name patterns
+    // Suspicious name patterns. Provenance-scoped patterns (impersonation) are
+    // skipped for Web Store / enterprise installs, where a brand-name prefix is
+    // not evidence of impersonation; installType is Chrome's attested
+    // provenance channel, so anything unexpected is treated as non-store
+    // (fail-safe: score it). See Debt Map F-3.
+    const isStoreProvenance =
+      ext.installType === "normal" || ext.installType === "admin";
     for (const pattern of SUSPICIOUS_NAME_PATTERNS) {
+      if (pattern.scope === "non-store" && isStoreProvenance) continue;
       if (pattern.regex.test(ext.name)) {
         results.push({
           ruleId: `meta-name-${pattern.id}`,

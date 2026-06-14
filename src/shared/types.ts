@@ -1,5 +1,21 @@
 export type RiskLevel = "red" | "yellow" | "green";
 
+export interface BlocklistEntry {
+  reason: string;
+  source: string;
+}
+
+export interface BlocklistStatus {
+  // Time of the last successful refresh, or null if never refreshed.
+  updatedAt: number | null;
+  // Entries in the list currently in use (live, cache, or fallback snapshot).
+  count: number;
+  // Whether the most recent fetch attempt succeeded.
+  lastFetchOk: boolean;
+  // Time of the most recent fetch attempt (success or failure), or null.
+  lastAttemptAt: number | null;
+}
+
 export interface RuleResult {
   ruleId: string;
   category: string;
@@ -38,9 +54,14 @@ export interface ScanResult {
     green: number;
   };
   scannedAt: number;
+  // Present on results written by this version onward; absent on legacy data.
+  schemaVersion?: number;
 }
 
 export interface UserPreferences {
+  // Reserved / not yet wired up: scans use the fixed SCAN_INTERVAL_MINUTES
+  // constant, not this field. Kept for storage compatibility and a future
+  // user-configurable interval (Debt Map C-7 / Q4). See docs/refactor-followups.md.
   scanIntervalMinutes: number;
   notifyOnNewRedExtension: boolean;
   notifyOnNewYellowExtension: boolean;

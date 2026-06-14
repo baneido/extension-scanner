@@ -5,11 +5,18 @@
   "description": "Chrome extension threat detector - detects potentially malicious extensions",
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "update-blocklist": "node scripts/update-blocklist-snapshot.mjs"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "devDependencies": {
     "chrome-types": "^0.1.415",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
   }
 }

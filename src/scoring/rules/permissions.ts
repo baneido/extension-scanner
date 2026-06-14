@@ -22,16 +22,27 @@ export const permissionsRule: ScoringRule = {
           category: "permissions",
           description: `Requests "${perm}" permission (+${weight})`,
           score: weight,
-          severity: weight >= 15 ? "critical" : weight >= 10 ? "high" : "medium",
+          severity:
+            weight >= 15
+              ? "critical"
+              : weight >= 10
+                ? "high"
+                : weight >= 5
+                  ? "medium"
+                  : "low",
         });
       }
       if (weight === undefined) {
+        // A permission Chrome added that we have not yet catalogued. Flag it so
+        // it stays visible for triage, but at a low weight that cannot push a
+        // benign extension over a threshold on its own (Debt Map F-1). Once
+        // observed, dangerous ones get a real weight in PERMISSION_WEIGHTS.
         results.push({
           ruleId: `perm-unknown-${perm}`,
           category: "permissions",
-          description: `Requests unknown permission "${perm}" (+5)`,
-          score: 5,
-          severity: "medium",
+          description: `Requests unrecognized permission "${perm}" (+3)`,
+          score: 3,
+          severity: "low",
         });
       }
     }
@@ -49,9 +60,11 @@ export const permissionsRule: ScoringRule = {
       }
     }
 
-    // Excessive risky permissions
+    // Excessive risky permissions. Only catalogued permissions at the
+    // webNavigation/identity/management tier and above (>=7) count; unknowns
+    // default to 0 so they no longer auto-inflate this count (Debt Map F-1).
     const riskyPermCount = [...perms].filter(
-      (p) => (PERMISSION_WEIGHTS[p] ?? 5) >= 5
+      (p) => (PERMISSION_WEIGHTS[p] ?? 0) >= 7
     ).length;
     if (riskyPermCount >= 6) {
       results.push({

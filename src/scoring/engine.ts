@@ -1,11 +1,47 @@
 import { allRules } from "./rules/index";
+import type { ScoringRule } from "./types";
 import { THRESHOLDS } from "../shared/constants";
-import type { ScoredExtension, RiskLevel, ScanResult } from "../shared/types";
+import type {
+  ScoredExtension,
+  RiskLevel,
+  ScanResult,
+  RuleResult,
+} from "../shared/types";
+
+/**
+ * Evaluate one rule, isolating failures. A throwing rule (e.g. a future rule
+ * added per CLAUDE.md) must not abort the whole scan, which would leave the
+ * worker with no saved result and a stale badge (Debt Map A-5). The failure is
+ * logged loudly and surfaced as an info finding so an under-scored result is
+ * not mistaken for a clean one.
+ */
+export function safeEvaluate(
+  rule: ScoringRule,
+  ext: chrome.management.ExtensionInfo
+): RuleResult[] {
+  try {
+    return rule.evaluate(ext);
+  } catch (error) {
+    console.error(
+      `[ExtScanner] Rule "${rule.id}" failed for extension ${ext.id}:`,
+      error
+    );
+    return [
+      {
+        ruleId: `${rule.id}-error`,
+        category: rule.category,
+        description: `Rule "${rule.id}" failed to evaluate`,
+        score: 0,
+        severity: "info",
+      },
+    ];
+  }
+}
 
 export function scoreExtension(
   ext: chrome.management.ExtensionInfo
 ): ScoredExtension {
-  const ruleResults = allRules.flatMap((rule) => rule.evaluate(ext));
+  const ruleResults = allRules.flatMap((rule) => safeEvaluate(rule, ext));
   const totalScore = ruleResults.reduce((sum, r) => sum + r.score, 0);
   const riskLevel = classifyRisk(totalScore);
 

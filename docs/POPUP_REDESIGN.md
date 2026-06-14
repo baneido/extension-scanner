@@ -7,7 +7,7 @@ Complete UI/UX redesign of the Extension Scanner popup using a security-focused 
 ## Design System Applied
 
 ### Style: Cyberpunk Security Theme
-- **Typography**: Fira Code (headings/monospace) + Fira Sans (body)
+- **Typography**: system monospace stack (`ui-monospace`, …) for headings/scores + system sans stack (`-apple-system`, …) for body. Originally Fira Code + Fira Sans via Google Fonts; switched to system fonts so a security tool no longer phones home to a third party on every popup open (Debt Map F-5). The manifest CSP (`style-src 'self'; font-src 'self'`) enforces this at runtime.
 - **Color Palette**: Security blues (#0369A1, #0EA5E9) with threat colors (red/yellow/green)
 - **Effects**: Neon glow, subtle scanlines, glassmorphism with backdrop blur
 - **Background**: Dark gradient (slate-900 to slate-800)

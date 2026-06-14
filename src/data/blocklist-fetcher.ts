@@ -3,11 +3,38 @@ import {
   STORAGE_KEYS,
   BLOCKLIST_UPDATE_INTERVAL_MINUTES,
 } from "../shared/constants";
+import type { BlocklistEntry, BlocklistStatus } from "../shared/types";
 import { FALLBACK_MALICIOUS_IDS } from "./blocklist-fallback";
 
-export interface BlocklistEntry {
-  reason: string;
-  source: string;
+const DEFAULT_STATUS: BlocklistStatus = {
+  updatedAt: null,
+  count: 0,
+  lastFetchOk: false,
+  lastAttemptAt: null,
+};
+
+/** Read the persisted blocklist freshness status (Debt Map F-4). */
+export async function getBlocklistStatus(): Promise<BlocklistStatus> {
+  const data = await chrome.storage.local.get(STORAGE_KEYS.BLOCKLIST_STATUS);
+  const raw = data[STORAGE_KEYS.BLOCKLIST_STATUS] as
+    | Partial<BlocklistStatus>
+    | undefined;
+  return { ...DEFAULT_STATUS, ...(raw ?? {}) };
+}
+
+// Serialize status writes through a single chain so concurrent read-modify-write
+// calls (e.g. an overlapping periodic-scan and blocklist-update on the same
+// alarm tick) cannot clobber each other's fields.
+let statusWriteChain: Promise<void> = Promise.resolve();
+
+function recordStatus(patch: Partial<BlocklistStatus>): Promise<void> {
+  statusWriteChain = statusWriteChain.then(async () => {
+    const current = await getBlocklistStatus();
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.BLOCKLIST_STATUS]: { ...current, ...patch },
+    });
+  });
+  return statusWriteChain;
 }
 
 /**
@@ -19,17 +46,43 @@ export async function getBlocklist(): Promise<
 > {
   const cached = await loadCachedBlocklist();
   if (cached && !isCacheExpired(cached.updatedAt)) {
+    // Serving a still-fresh cache (no fetch). Reflect that in the status so the
+    // freshness indicator is correct even on a profile that never refetches,
+    // including after upgrading from a version that had no status (Debt Map F-4).
+    await recordStatus({
+      updatedAt: cached.updatedAt,
+      count: cached.list.size,
+      lastFetchOk: true,
+    });
     return cached.list;
   }
 
   try {
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
+    await recordStatus({
+      updatedAt: Date.now(),
+      count: freshList.size,
+      lastFetchOk: true,
+      lastAttemptAt: Date.now(),
+    });
     return freshList;
-  } catch {
-    // Network error - use cache if available, otherwise fallback
-    if (cached) return cached.list;
-    return FALLBACK_MALICIOUS_IDS;
+  } catch (error) {
+    // Network/parse error - use cache if available, otherwise fallback.
+    // Logged (not swallowed) so a persistently failing source is visible.
+    console.warn(
+      "[ExtScanner] Blocklist fetch failed; using cache/fallback:",
+      error
+    );
+    // count reflects the list actually serving (cache or snapshot), so the UI
+    // does not read "0 entries" while the fallback is scoring (Debt Map F-4).
+    const serving = cached ? cached.list : FALLBACK_MALICIOUS_IDS;
+    await recordStatus({
+      lastFetchOk: false,
+      lastAttemptAt: Date.now(),
+      count: serving.size,
+    });
+    return serving;
   }
 }
 
@@ -42,12 +95,80 @@ export async function refreshBlocklist(): Promise<
   try {
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
+    await recordStatus({
+      updatedAt: Date.now(),
+      count: freshList.size,
+      lastFetchOk: true,
+      lastAttemptAt: Date.now(),
+    });
     return freshList;
-  } catch {
+  } catch (error) {
+    console.warn(
+      "[ExtScanner] Blocklist refresh failed; using cache/fallback:",
+      error
+    );
+    await recordStatus({ lastFetchOk: false, lastAttemptAt: Date.now() });
     const cached = await loadCachedBlocklist();
     if (cached) return cached.list;
     return FALLBACK_MALICIOUS_IDS;
   }
+}
+
+// Reject obviously-wrong responses before they overwrite a good cache.
+const MAX_BLOCKLIST_BYTES = 5_000_000;
+
+/** One entry of the chrome-mal-ids `extensions` array we rely on. */
+interface RawBlocklistEntry {
+  ext_id?: unknown;
+  browser?: unknown;
+  date_added?: unknown;
+  source?: unknown;
+}
+
+/**
+ * Parse the chrome-mal-ids `current-list.json` payload into a Map. Shape:
+ * `{ meta: {...}, extensions: [{ ext_id, browser, date_added, source, ... }] }`.
+ * Edge-only IOCs are skipped (they cannot match a Chrome install). Throws on a
+ * payload that is not an object with a non-empty extensions array, so an empty
+ * or wrong-shaped response is treated as a failure (preserving the last good
+ * cache) rather than a successful empty blocklist (Debt Map A-4 / Q1).
+ */
+export function parseBlocklist(data: unknown): Map<string, BlocklistEntry> {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("Blocklist response was not a JSON object");
+  }
+
+  const extensions = (data as { extensions?: unknown }).extensions;
+  if (!Array.isArray(extensions)) {
+    throw new Error("Blocklist response had no extensions array");
+  }
+
+  const list = new Map<string, BlocklistEntry>();
+  for (const raw of extensions) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const entry = raw as RawBlocklistEntry;
+    const id = entry.ext_id;
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (entry.browser === "edge") continue;
+
+    const dateAdded =
+      typeof entry.date_added === "string" ? entry.date_added : null;
+    list.set(id, {
+      reason: dateAdded
+        ? `Listed in the chrome-mal-ids IOC database (added ${dateAdded})`
+        : "Listed in the chrome-mal-ids IOC database",
+      source:
+        typeof entry.source === "string" && entry.source.length > 0
+          ? entry.source
+          : "chrome-mal-ids (TPCI)",
+    });
+  }
+
+  if (list.size === 0) {
+    throw new Error("Blocklist response contained no valid extension IDs");
+  }
+
+  return list;
 }
 
 async function fetchRemoteBlocklist(): Promise<
@@ -58,19 +179,12 @@ async function fetchRemoteBlocklist(): Promise<
     throw new Error(`Blocklist fetch failed: ${response.status}`);
   }
 
-  const data: unknown = await response.json();
-  const list = new Map<string, BlocklistEntry>();
-
-  // The chrome-mal-ids repo provides a JSON array of extension IDs
-  if (Array.isArray(data)) {
-    for (const id of data) {
-      if (typeof id === "string") {
-        list.set(id, { reason: "Known malicious extension (chrome-mal-ids)", source: "chrome-mal-ids" });
-      }
-    }
+  const text = await response.text();
+  if (text.length > MAX_BLOCKLIST_BYTES) {
+    throw new Error(`Blocklist response too large: ${text.length} bytes`);
   }
 
-  return list;
+  return parseBlocklist(JSON.parse(text));
 }
 
 interface CachedBlocklist {

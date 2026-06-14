@@ -1,36 +1,69 @@
-import type {
-  ScanResult,
-  ScoredExtension,
-  RiskLevel,
-  UserPreferences,
-} from "../shared/types";
-import { timeAgo } from "../shared/utils";
+import type { ScanResult, ScoredExtension, RiskLevel } from "../shared/types";
+import {
+  sendExtMessage,
+  type BlocklistStatusResponse,
+} from "../shared/messages";
+import { isBlocklisted } from "../scoring/classification";
+import {
+  timeAgo,
+  largestIconUrl,
+  escapeHtml,
+  mustGetElement,
+  isBlocklistStale,
+} from "../shared/utils";
+import { loadPreferences, updatePreferences } from "../storage/store";
 
 // --- State ---
 let currentResult: ScanResult | null = null;
 let currentFilter: "all" | RiskLevel = "all";
 let searchQuery = "";
+// Suppression state mirrored from preferences for rendering tags/undo.
+let dismissedIds = new Set<string>();
+let allowlistIds = new Set<string>();
+
+async function refreshSuppressionState(): Promise<void> {
+  const prefs = await loadPreferences();
+  dismissedIds = new Set(prefs.dismissedExtensionIds);
+  allowlistIds = new Set(prefs.customAllowlist);
+}
 
 // --- DOM Elements ---
-const scanTimeEl = document.getElementById("scan-time")!;
-const countTotal = document.getElementById("count-total")!;
-const countRed = document.getElementById("count-red")!;
-const countYellow = document.getElementById("count-yellow")!;
-const countGreen = document.getElementById("count-green")!;
-const listEl = document.getElementById("extensions-list")!;
-const loadingEl = document.getElementById("loading")!;
-const btnScan = document.getElementById("btn-scan") as HTMLButtonElement;
-const searchInput = document.getElementById(
-  "search-input"
-) as HTMLInputElement;
+const scanTimeEl = mustGetElement("scan-time");
+const countTotal = mustGetElement("count-total");
+const countRed = mustGetElement("count-red");
+const countYellow = mustGetElement("count-yellow");
+const countGreen = mustGetElement("count-green");
+const listEl = mustGetElement("extensions-list");
+const loadingEl = mustGetElement("loading");
+const btnScan = mustGetElement<HTMLButtonElement>("btn-scan");
+const searchInput = mustGetElement<HTMLInputElement>("search-input");
 const filterBtns = document.querySelectorAll<HTMLButtonElement>(".filter-btn");
 
-const prefNotifyRed = document.getElementById(
-  "pref-notify-red"
-) as HTMLInputElement;
-const prefNotifyYellow = document.getElementById(
-  "pref-notify-yellow"
-) as HTMLInputElement;
+const prefNotifyRed = mustGetElement<HTMLInputElement>("pref-notify-red");
+const prefNotifyYellow = mustGetElement<HTMLInputElement>("pref-notify-yellow");
+const blocklistStatusEl = mustGetElement("blocklist-status");
+
+async function renderBlocklistStatus(): Promise<void> {
+  let status: BlocklistStatusResponse | null = null;
+  try {
+    status = (await sendExtMessage({
+      type: "GET_BLOCKLIST_STATUS",
+    })) as BlocklistStatusResponse | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load blocklist status:", error);
+  }
+  if (!status) {
+    blocklistStatusEl.textContent = "";
+    return;
+  }
+  const stale = isBlocklistStale(status, Date.now());
+  const updated =
+    status.updatedAt !== null ? timeAgo(status.updatedAt) : "never";
+  blocklistStatusEl.textContent = `Blocklist: ${status.count} entries · updated ${updated}${
+    stale ? " · ⚠ stale or unavailable" : ""
+  }`;
+  blocklistStatusEl.classList.toggle("stale", stale);
+}
 
 // --- Rendering ---
 function render(): void {
@@ -82,13 +115,23 @@ function render(): void {
 }
 
 function renderExtCard(ext: ScoredExtension): string {
-  const iconUrl =
-    ext.icons.length > 0 ? ext.icons[ext.icons.length - 1]!.url : "";
+  const iconUrl = largestIconUrl(ext.icons);
   const iconHtml = iconUrl
     ? `<img class="ext-icon" src="${escapeHtml(iconUrl)}" alt="" />`
     : `<div class="ext-icon"></div>`;
 
   const installLabel = getInstallLabel(ext.installType);
+  const blocklisted = isBlocklisted(ext);
+  const isAllowlisted = allowlistIds.has(ext.id);
+  const isDismissed = dismissedIds.has(ext.id);
+
+  const tags = [
+    blocklisted
+      ? `<span class="ext-tag blocklisted">Known malware</span>`
+      : "",
+    isAllowlisted ? `<span class="ext-tag allowlisted">Allowlisted</span>` : "",
+    isDismissed ? `<span class="ext-tag dismissed">Dismissed</span>` : "",
+  ].join("");
 
   const findings = [...ext.ruleResults]
     .sort((a, b) => b.score - a.score)
@@ -116,7 +159,7 @@ function renderExtCard(ext: ScoredExtension): string {
       <div class="ext-card-header">
         ${iconHtml}
         <div class="ext-main">
-          <div class="ext-name">${escapeHtml(ext.name)}</div>
+          <div class="ext-name">${escapeHtml(ext.name)}${tags}</div>
           <div class="ext-meta">
             v${escapeHtml(ext.version)} · ${installLabel} ·
             ${ext.permissions.length} permission(s)
@@ -154,15 +197,26 @@ function renderExtCard(ext: ScoredExtension): string {
             : `<div class="findings-title">No issues detected</div>`
         }
         <div class="ext-actions">
-          <button class="btn-action" data-action="allowlist" data-ext-id="${ext.id}">
-            Add to Allowlist
+          ${
+            blocklisted
+              ? `<span class="ext-actions-note">Known malware — cannot be allowlisted or dismissed.</span>`
+              : `
+          <button class="btn-action" data-action="${
+            isAllowlisted ? "un-allowlist" : "allowlist"
+          }" data-ext-id="${escapeHtml(ext.id)}">
+            ${isAllowlisted ? "Remove from Allowlist" : "Add to Allowlist"}
           </button>
-          <button class="btn-action" data-action="dismiss" data-ext-id="${ext.id}">
-            Dismiss
-          </button>
+          <button class="btn-action" data-action="${
+            isDismissed ? "un-dismiss" : "dismiss"
+          }" data-ext-id="${escapeHtml(ext.id)}">
+            ${isDismissed ? "Undo Dismiss" : "Dismiss"}
+          </button>`
+          }
           ${
             ext.mayDisable && ext.enabled
-              ? `<button class="btn-action danger" data-action="disable" data-ext-id="${ext.id}">
+              ? `<button class="btn-action danger" data-action="disable" data-ext-id="${escapeHtml(
+                  ext.id
+                )}">
               Disable Extension
             </button>`
               : ""
@@ -188,40 +242,52 @@ function getInstallLabel(installType: string): string {
   }
 }
 
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // --- Actions ---
 async function handleAction(action: string, extId: string): Promise<void> {
   if (action === "disable") {
     await chrome.management.setEnabled(extId, false);
     // Re-scan after disabling
     btnScan.click();
-  } else if (action === "dismiss" || action === "allowlist") {
-    const data = await chrome.storage.local.get("userPreferences");
-    const prefs: UserPreferences = data["userPreferences"] ?? {
-      scanIntervalMinutes: 60,
-      notifyOnNewRedExtension: true,
-      notifyOnNewYellowExtension: false,
-      dismissedExtensionIds: [],
-      customAllowlist: [],
-    };
-
-    if (action === "dismiss") {
-      if (!prefs.dismissedExtensionIds.includes(extId)) {
-        prefs.dismissedExtensionIds.push(extId);
-      }
-    } else {
-      if (!prefs.customAllowlist.includes(extId)) {
-        prefs.customAllowlist.push(extId);
-      }
-    }
-
-    await chrome.storage.local.set({ userPreferences: prefs });
+    return;
   }
+
+  if (action === "allowlist" || action === "dismiss") {
+    // Guardrail: a known-malware extension can never be silenced (Debt Map Q2).
+    const ext = currentResult?.extensions.find((e) => e.id === extId);
+    if (ext && isBlocklisted(ext)) {
+      window.alert(
+        "This extension is on the known-malware blocklist and cannot be allowlisted or dismissed. Use Disable Extension instead."
+      );
+      return;
+    }
+    await updatePreferences((prefs) => {
+      const list =
+        action === "dismiss"
+          ? prefs.dismissedExtensionIds
+          : prefs.customAllowlist;
+      if (!list.includes(extId)) {
+        list.push(extId);
+      }
+    });
+  } else if (action === "un-allowlist" || action === "un-dismiss") {
+    await updatePreferences((prefs) => {
+      if (action === "un-dismiss") {
+        prefs.dismissedExtensionIds = prefs.dismissedExtensionIds.filter(
+          (id) => id !== extId
+        );
+      } else {
+        prefs.customAllowlist = prefs.customAllowlist.filter(
+          (id) => id !== extId
+        );
+      }
+    });
+  } else {
+    return;
+  }
+
+  // Reflect the change immediately (tags, button labels).
+  await refreshSuppressionState();
+  render();
 }
 
 // --- Event handlers ---
@@ -239,15 +305,20 @@ searchInput.addEventListener("input", () => {
   render();
 });
 
-btnScan.addEventListener("click", () => {
+btnScan.addEventListener("click", async () => {
   btnScan.disabled = true;
   btnScan.textContent = "Scanning...";
-  chrome.runtime.sendMessage({ type: "RUN_SCAN" }, (result) => {
+  try {
+    const result = await sendExtMessage({ type: "RUN_SCAN" });
     currentResult = result as ScanResult | null;
     render();
+    void renderBlocklistStatus();
+  } catch (error) {
+    console.error("[ExtScanner] Scan failed:", error);
+  } finally {
     btnScan.disabled = false;
     btnScan.textContent = "Scan Now";
-  });
+  }
 });
 
 // Preferences
@@ -255,31 +326,33 @@ prefNotifyRed.addEventListener("change", () => savePrefs());
 prefNotifyYellow.addEventListener("change", () => savePrefs());
 
 async function savePrefs(): Promise<void> {
-  const data = await chrome.storage.local.get("userPreferences");
-  const prefs: UserPreferences = data["userPreferences"] ?? {
-    scanIntervalMinutes: 60,
-    notifyOnNewRedExtension: true,
-    notifyOnNewYellowExtension: false,
-    dismissedExtensionIds: [],
-    customAllowlist: [],
-  };
-  prefs.notifyOnNewRedExtension = prefNotifyRed.checked;
-  prefs.notifyOnNewYellowExtension = prefNotifyYellow.checked;
-  await chrome.storage.local.set({ userPreferences: prefs });
+  await updatePreferences((prefs) => {
+    prefs.notifyOnNewRedExtension = prefNotifyRed.checked;
+    prefs.notifyOnNewYellowExtension = prefNotifyYellow.checked;
+  });
 }
 
 async function loadPrefs(): Promise<void> {
-  const data = await chrome.storage.local.get("userPreferences");
-  const prefs = data["userPreferences"] as UserPreferences | undefined;
-  if (prefs) {
-    prefNotifyRed.checked = prefs.notifyOnNewRedExtension;
-    prefNotifyYellow.checked = prefs.notifyOnNewYellowExtension;
-  }
+  const prefs = await loadPreferences();
+  prefNotifyRed.checked = prefs.notifyOnNewRedExtension;
+  prefNotifyYellow.checked = prefs.notifyOnNewYellowExtension;
 }
 
 // --- Init ---
-chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" }, (result) => {
-  currentResult = result as ScanResult | null;
+(async () => {
+  try {
+    await refreshSuppressionState();
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load preferences:", error);
+  }
+  try {
+    const result = await sendExtMessage({ type: "GET_SCAN_RESULT" });
+    currentResult = result as ScanResult | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load scan result:", error);
+    currentResult = null;
+  }
   render();
-});
+  void renderBlocklistStatus();
+})();
 loadPrefs();

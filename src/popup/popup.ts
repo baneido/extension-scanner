@@ -1,22 +1,58 @@
-import type { ScanResult, ScoredExtension } from "../shared/types";
-import { timeAgo } from "../shared/utils";
+import type { ScoredExtension } from "../shared/types";
+import {
+  sendExtMessage,
+  type ScanResultResponse,
+  type BlocklistStatusResponse,
+} from "../shared/messages";
+import { isBlocklisted } from "../scoring/classification";
+import { loadPreferences } from "../storage/store";
+import {
+  timeAgo,
+  largestIconUrl,
+  escapeHtml,
+  mustGetElement,
+  isBlocklistStale,
+} from "../shared/utils";
+
+// Extensions the user has allowlisted are hidden from the popup threat list
+// (but a blocklisted extension can never be hidden — Debt Map Q2).
+let allowlist = new Set<string>();
 
 // DOM elements
-const scanTimeEl = document.getElementById("scan-time")!;
-const badgeRedEl = document.getElementById("badge-red")!;
-const badgeYellowEl = document.getElementById("badge-yellow")!;
-const badgeGreenEl = document.getElementById("badge-green")!;
-const threatsEl = document.getElementById("threats")!;
-const loadingEl = document.getElementById("loading")!;
-const btnScan = document.getElementById("btn-scan") as HTMLButtonElement;
-const btnDashboard = document.getElementById(
-  "btn-dashboard"
-) as HTMLButtonElement;
+const scanTimeEl = mustGetElement("scan-time");
+const badgeRedEl = mustGetElement("badge-red");
+const badgeYellowEl = mustGetElement("badge-yellow");
+const badgeGreenEl = mustGetElement("badge-green");
+const threatsEl = mustGetElement("threats");
+const blocklistStatusEl = mustGetElement("blocklist-status");
+const btnScan = mustGetElement<HTMLButtonElement>("btn-scan");
+const btnDashboard = mustGetElement<HTMLButtonElement>("btn-dashboard");
+
+/** Show a compact blocklist freshness indicator (Debt Map F-4). */
+async function renderBlocklistStatus(): Promise<void> {
+  let status: BlocklistStatusResponse | null = null;
+  try {
+    status = (await sendExtMessage({
+      type: "GET_BLOCKLIST_STATUS",
+    })) as BlocklistStatusResponse | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load blocklist status:", error);
+  }
+  if (!status) {
+    blocklistStatusEl.textContent = "";
+    return;
+  }
+  const stale = isBlocklistStale(status, Date.now());
+  blocklistStatusEl.textContent = stale
+    ? "⚠ Blocklist stale"
+    : `Blocklist: ${status.count}`;
+  blocklistStatusEl.classList.toggle("stale", stale);
+}
 
 /**
  * Render scan results to the popup UI
  */
-function renderScanResult(result: ScanResult | null): void {
+function renderScanResult(result: ScanResultResponse): void {
   if (!result) {
     threatsEl.innerHTML = `
       <div class="empty-state" role="status">
@@ -34,9 +70,12 @@ function renderScanResult(result: ScanResult | null): void {
   updateStatusBadge(badgeYellowEl, result.summary.yellow);
   updateStatusBadge(badgeGreenEl, result.summary.green);
 
-  // Render threat list (red and yellow only)
+  // Render threat list (red and yellow only), hiding allowlisted extensions
+  // unless they are known malware (which can never be suppressed).
   const threats = result.extensions.filter(
-    (e) => e.riskLevel === "red" || e.riskLevel === "yellow"
+    (e) =>
+      (e.riskLevel === "red" || e.riskLevel === "yellow") &&
+      !(allowlist.has(e.id) && !isBlocklisted(e))
   );
 
   if (threats.length === 0) {
@@ -76,8 +115,7 @@ function updateStatusBadge(badgeEl: HTMLElement, count: number): void {
  * Render a single threat item
  */
 function renderThreatItem(ext: ScoredExtension): string {
-  const iconUrl =
-    ext.icons.length > 0 ? ext.icons[ext.icons.length - 1]!.url : "";
+  const iconUrl = largestIconUrl(ext.icons);
   const iconHtml = iconUrl
     ? `<img class="threat-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(ext.name)} icon" />`
     : `<div class="threat-icon"></div>`;
@@ -111,7 +149,7 @@ function addThreatItemHandlers(): void {
   threatItems.forEach((item) => {
     // Click handler
     item.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+      sendExtMessage({ type: "OPEN_DASHBOARD" });
     });
 
     // Keyboard handler (Enter/Space)
@@ -119,19 +157,10 @@ function addThreatItemHandlers(): void {
       const event = e as KeyboardEvent;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+        sendExtMessage({ type: "OPEN_DASHBOARD" });
       }
     });
   });
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /**
@@ -158,22 +187,40 @@ function setButtonLoading(loading: boolean): void {
 // === Event Listeners ===
 
 // Load initial scan result
-chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" }, (result) => {
-  renderScanResult(result as ScanResult | null);
-});
+(async () => {
+  try {
+    const prefs = await loadPreferences();
+    allowlist = new Set(prefs.customAllowlist);
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load preferences:", error);
+  }
+  try {
+    const result = await sendExtMessage({ type: "GET_SCAN_RESULT" });
+    renderScanResult(result as ScanResultResponse);
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load scan result:", error);
+    renderScanResult(null);
+  }
+  void renderBlocklistStatus();
+})();
 
 // Scan Now button
-btnScan.addEventListener("click", () => {
+btnScan.addEventListener("click", async () => {
   setButtonLoading(true);
-  chrome.runtime.sendMessage({ type: "RUN_SCAN" }, (result) => {
-    renderScanResult(result as ScanResult | null);
+  try {
+    const result = await sendExtMessage({ type: "RUN_SCAN" });
+    renderScanResult(result as ScanResultResponse);
+  } catch (error) {
+    console.error("[ExtScanner] Scan failed:", error);
+    renderScanResult(null);
+  } finally {
     setButtonLoading(false);
-  });
+  }
 });
 
 // Dashboard button
 btnDashboard.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+  sendExtMessage({ type: "OPEN_DASHBOARD" });
 });
 
 // Keyboard shortcuts
