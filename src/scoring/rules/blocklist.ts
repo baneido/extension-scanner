@@ -1,6 +1,5 @@
 import type { ScoringRule } from "../types";
-import type { RuleResult } from "../../shared/types";
-import type { BlocklistEntry } from "../../data/blocklist-fetcher";
+import type { RuleResult, BlocklistEntry } from "../../shared/types";
 
 let cachedBlocklist: Map<string, BlocklistEntry> | null = null;
 

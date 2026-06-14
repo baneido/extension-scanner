@@ -3,12 +3,8 @@ import {
   STORAGE_KEYS,
   BLOCKLIST_UPDATE_INTERVAL_MINUTES,
 } from "../shared/constants";
+import type { BlocklistEntry } from "../shared/types";
 import { FALLBACK_MALICIOUS_IDS } from "./blocklist-fallback";
-
-export interface BlocklistEntry {
-  reason: string;
-  source: string;
-}
 
 /**
  * Fetch the latest blocklist from GitHub and cache it in chrome.storage.local.

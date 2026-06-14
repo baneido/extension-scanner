@@ -1,5 +1,10 @@
 export type RiskLevel = "red" | "yellow" | "green";
 
+export interface BlocklistEntry {
+  reason: string;
+  source: string;
+}
+
 export interface RuleResult {
   ruleId: string;
   category: string;
