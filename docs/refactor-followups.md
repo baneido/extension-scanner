@@ -1,96 +1,75 @@
-# Refactor Follow-ups (design memos for deferred items)
+# Refactor Follow-ups — Security Decision Record
 
 - 作成日: 2026-06-14
-- 文脈: `refactor-instructions.md` の Phase 6。コードからは正解を確定できない、またはプロダクト判断・人間の承認が必要なため、**実装せず設計メモのみ**を残す項目。
-- 各項目は Debt Map の ID を引き継ぐ。実装する場合は、まず該当する Phase 1 特性テストの更新方針を決めてから着手すること。
+- 文脈: `refactor-instructions.md` の Phase 6 で「設計メモのみ」とした残課題について、**セキュリティエンジニア目線で方針を決定**したもの。各決定は独立した敵対的レビュー(バイパス・誤った安心感・過剰実装・検証不能性の観点)を通過済み(全件 endorse)。
+- ステータス凡例: ✅ 実装済み / 📝 方針決定・コードは現状維持(documented policy) / ⏸ 計画済み・未実装。
+- 各項目は Debt Map / Q 番号を引き継ぐ。
 
 ---
 
-## ブロッカー
+## 検出精度(スコアリング)
 
-### Q1 / A-1: ブロックリスト取得先 — ✅ 解決(2026-06-14)
+### F-2: sensitive-domain 照合 — ✅ 実装済み
+- **決定**: 修正する。非アンカー部分文字列照合(`netflix.com`→`/x\.com/`、`burbankca.gov`→`/bank/` の誤検知、かつ加点無上限で最小権限が `<all_urls>` を逆転)はセキュリティツールの信頼を損なう実バグ。
+- **実装**: match pattern をホスト名にパースし、登録ドメイン境界で照合(完全一致 or サブドメイン)。`bank`/`crypto` はラベル先頭一致(`bankofamerica` は採用、`burbankca` は不採用)。per-host findings を単一 finding に集約し、合計を **24(<`<all_urls>` の 25)にキャップ**して最小権限の逆転を解消。`host-permissions.ts`、テーブル駆動テスト追加。
 
-- **旧状態**: `BLOCKLIST_SOURCE_URL`(`nicoleahmed/chrome-mal-ids`)は **HTTP 404**。100点ルールが本番で inert だった。
-- **選定したソース**: [`The-Privacy-Commons-Institute/chrome-mal-ids`](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids) の `data/current-list.json`。
-  - **権威性の根拠**: 2021年に始まった著名な mallorybowes 系列の正統な後継。The Privacy Commons Institute(TPCI)が運用し、3000+ の Chrome IOC、毎日更新(確認時点で当日 push)、SCHEMA.md / TPCI-V 検証フィールド・STIX・MISP・Sigma など複数フォーマットを公開。CC BY 4.0。
-  - **到達性の検証**: HTTP 200、約 2.1MB(`MAX_BLOCKLIST_BYTES`=5MB 内)、`Access-Control-Allow-Origin: *`(同一ホスト raw.githubusercontent.com なので `host_permissions` 追加不要)。
-  - **形式**: `{ meta, extensions: [{ ext_id, browser, date_added, source, notes, ... }] }`。旧形式(文字列配列)から変わったため `parseBlocklist()` を新スキーマ対応に差し替え、`browser === "edge"` を除外(Chrome スキャナのため chrome + both のみ採用 = 3000件)。実データに対するエンドツーエンド解析も検証済み。
-- **残課題 → F-4 へ**: 単一ソース依存・署名/ハッシュ検証なし・空フォールバックの3点は信頼モデルの設計判断として F-4 に残す。
+### F-1: 未知パーミッション +5 — ✅ 実装済み
+- **決定**: 修正する。良性の最新権限(`sidePanel`/`offscreen`/…)を黄色化し、危険な未収載権限(`tabCapture`/`userScripts`/…)を過小評価していた。
+- **実装**: `PERMISSION_WEIGHTS` に現行 Chrome 権限を約40追加(capture/inject系は high/critical、UI系は 0-2)。真に未知の権限は **+3/low**(従来 +5/medium)に降格し可視性は維持。`riskyPermCount` の述語を `(weight ?? 0) >= 7` に変更し、未知が「過剰スコープ +10」を自動発火しないようにした。severity ラダーに low 帯(weight 1-4)を追加。
 
-### F-4: ブロックリストの信頼モデル(提案のみ)
+### F-3: 偽装検知の誤検知 — ✅ 実装済み
+- **決定**: 修正する。ただし**ストア由来を素朴に除外しない**。検証で判明した通り、Chrome Web Store の全拡張は `clients2.google.com` を update URL に持つため、「update URL = clients2.google.com」では「本物の Google 製」を証明できず、ストア掲載の偽装マルウェアにバイパスを与えてしまう。
+- **実装**: `/^google\s/`・`/^chrome\s/` 偽装パターンを **`installType` が `normal`/`admin`(ストア/管理者由来)では抑制**し、`sideload`/`development`(オフストア=偽装の実ベクトル)でのみ +10 を付与。`installType` は Chrome が証明する provenance チャネルであり、不明値は非ストア扱い(fail-safe)。ストア掲載偽装はブロックリストで担保。`suspicious-patterns.ts`/`metadata.ts`、テスト更新。
 
-- **現状**: 取得先は権威的ソースに更新済み(Q1)だが、依然として単一の非認証 raw GitHub URL に「Known malicious(100点)」判定を全面依存。整合性チェックなし。`FALLBACK_MALICIOUS_IDS` は空。
-- **設計案**:
-  1. **整合性検証**: TPCI リポジトリはチェックサム類(`data/current-list-meta-chksum.txt` 等)も公開している。取得した JSON のハッシュを併せて取得・照合する仕組みを足すと、改竄・破損を検出できる。
-  2. **多重ソース照合**: 重大判定(100点)は複数ソースで裏取りする、または単一ソースのときは重みを下げる選択肢。
-  3. **フォールバックの実データ化**: CI でビルド時に当日のスナップショットを `FALLBACK_MALICIOUS_IDS` に同梱(誰が更新するか=CI 自動化)。オフライン初回起動でも最低限の検出を効かせる。
-- **判断が要る理由**: 100点=最強シグナルの信頼根拠を上げる設計で、コスト(追加フェッチ・CI 整備)とのトレードオフがあるためオーナー判断。
-
-### Q2 / A-7: Allowlist / Dismiss のセマンティクス未定義、昇格通知なし
-
-- **現状**: `dashboard.ts` の「Add to Allowlist」「Dismiss」は `userPreferences` に ID を書くだけ。唯一の読み手 `notifier.ts` は `previousIds.has(id)` を先に判定するため、**既存拡張には設定が一切効かない**(再インストール時のみ有効)。スコア・バッジ・一覧はこれらを無視。既存拡張が green→red に昇格しても通知されない。
-- **要判断**:
-  1. allowlist の意味: 脅威カウント/バッジ/popup一覧から除外? スコアを green に固定? 通知抑制のみ? ダッシュボードには「allowlisted」表示で残す?
-  2. dismiss の意味: 通知抑制のみ? popup一覧からも除外?
-  3. リスク昇格時(例: ブロックリスト更新で green→red)に通知すべきか。
-  4. これらの一覧を閲覧・取り消す UI を出すか。
-- **設計案(一案)**: スキャン後段に「抑制フィルタ」を1箇所設ける。`allowlist` は脅威カウント・バッジ・popup一覧から除外しつつ dashboard には「許可済み」タグ+取り消しボタンで残す。`dismiss` は通知と popup 列挙のみ抑制しスコアは保持。通知判定は「ID が新規」ではなく「(ID, riskLevel) の組が前回より悪化」に変更すると昇格通知が実現する。
-- **重大な注意**: allowlist をスコア/バッジに反映する設計は「誤って許可した悪意ある拡張を隠す」セキュリティトレードオフを伴う。必ずプロダクトオーナーの承認を得ること。実装時は `test/notifier.test.ts` の「ID-only 現挙動を固定したテスト(A-7注記つき)」を新仕様へ書き換える。
+### F-4: ブロックリストの信頼モデル — 一部 ✅ / 一部 📝 / 一部 ⏸
+取得先の権威性は Q1 で解決済み。残る信頼モデルは3つに分けて判断した。
+1. **完全性検証(MD5/チェックサム): 📝 採用しない。** 公開チェックサム `current-list-meta-chksum.txt` は **CSV の MD5 であって消費する `current-list.json` のものではなく**、しかも同一オリジン由来。同一オリジンのハッシュは転送破損しか検出できず、上流侵害(本来の脅威)は検出できない。転送は既に TLS で保護され、破損は `parseBlocklist`(A-4)が拒否する。MD5 を足すと「暗号学的に検証済み」という**誤った安心感**を与える純負債。上流が `current-list.json` の SHA-256 を out-of-band で公開したら再検討。
+2. **多重ソース照合 / 単一ソースの重み低減: 📝 採用しない。** 既知悪性 ID(100点)の重みを下げる/ゲートするのはマルウェアスキャナにとって**偽陰性**(危険な方向)を生む。第二の権威的・CORS 対応 Chrome IOC フィードが現れたら、フラグを**ゲートせず信頼度を上げる**方向でのみ照合を検討。
+3. **防御の多層化(フォールバック実データ化 + 鮮度の可視化): ⏸ 計画済み・未実装。** 最も価値が高い(前ソースが無言で死んだ失敗モードの再発防止)。実装案: (3a) CI ビルド時に `current-list.json` を取得→`parseBlocklist` で検証→生成モジュールに焼き込み `FALLBACK_MALICIOUS_IDS` を非空にする(0件ならビルド失敗)。取得は floor であり優先順位は fresh-cache > live > stale-cache > snapshot のまま。(3b) ブロックリストの最終更新時刻 / 取得成否を保存し、popup/dashboard に表示。鮮度が閾値(推奨 7日)超過 or フォールバック時は警告表示(スキャンはブロックしない=fail-safe)。**未実装の理由**: (3a) はビルド時ネットワーク取得+生成ファイルのコミット、(3b) はストレージ・メッセージ・UI 配線で、いずれもブラウザ実機検証が要るため、人間レビュー付きの別 PR が適切。
 
 ---
 
-## スコアリングポリシー(承認なしの実装禁止)
+## プライバシー / 供給網
 
-スコアの重み・閾値・分類は製品の主出力。変更は保存される `ScanResult`・バッジ・通知に波及するため、いずれも**承認後**に着手し、Phase 1 で固定した該当特性テストを新仕様へ更新する。
+### F-5: popup の Google Fonts 外部読み込み — ✅ 実装済み
+- **決定**: 第三者へのリクエストを排除する。**ローカル同梱(WOFF2)は採用せず、システムフォントスタックに統一**。理由: バイナリのフォント blob は CI/PR でレビューできず、供給網トラスト重視のセキュリティ製品には逆効果。検証可能性も優先。
+- **実装**: `popup.html` のリモート `<link>`(preconnect×2+stylesheet)を削除、`popup.css` を dashboard と同じシステムスタック化、`POPUP_REDESIGN.md` 更新。
+- **CSP の調整(決定仕様からの修正)**: manifest に `content_security_policy.extension_pages` を追加したが、**`style-src 'self'; font-src 'self'` のみ**に絞った。決定案の `connect-src 'self'` は MV3 では service worker にも適用されるため**ブロックリスト取得(raw.githubusercontent.com)を遮断**してしまい、`img-src 'self' data:` は拡張アイコンの `chrome://extension-icon/...` を遮断する。フォント漏洩の遮断に必要十分な範囲に留め、コア機能を壊さないことを優先(実機検証不可のため)。回帰テストで「popup に外部参照なし」「CSP に font-src/style-src 'self' あり・connect-src 制限なし」を固定。
 
-### Q6 / F-1: 未知パーミッションへの一律 +5
-
-- **問題**: `permissions.ts` は `PERMISSION_WEIGHTS`(29項目)に無い権限を一律 +5/medium とし、`?? 5` により未知6個で「excessive scope +10」が発火、良性の最新権限(`sidePanel`/`offscreen`/`tabGroups` 等)だけで yellow(≥30)に到達する。逆に危険な未収載権限(`tabCapture`/`audioCapture`/`userScripts`)も +5 で過小評価。
-- **設計案**: 現行 Chrome の全権限にカタログを拡充(良性は0、capture/userScripts 系は高め)。真に未知の権限は score 0 + info(「未認識の権限」)に降格。`riskyPermCount` の `?? 5` を廃止し未知を除外。必要なら権限カテゴリ小計にキャップ。
-- **検証**: `permissionsRule`/`scoreExtension` のフィクスチャテストで「良性権限セットは green を維持」「`tabCapture` は `desktopCapture` 級」「未知は riskyPermCount に数えない」を固定。代表的な人気拡張のリスク分類を変更前後で目視比較。
-
-### Q6 / F-2: sensitive-domain が非アンカーの部分文字列照合、加点無上限
-
-- **問題**: `host-permissions.ts` の `SENSITIVE_DOMAIN_PATTERNS` は非アンカー正規表現を**生のmatch pattern文字列**に対して test するため、`netflix.com`→`/x\.com/`、`box.com`/`wix.com`→`/x\.com/`、`burbankca.gov`→`/bank/` が誤一致。ホストごと +8 で上限がなく、9ホストで red(72)。一方 `<all_urls>` は25点で、**全サイトアクセスの方が低スコア**になる逆転がある(`test/rules.test.ts` に F-2 の現挙動を固定済み)。
-- **設計案**: 各 match pattern をホスト名へパースし、登録可能ドメイン境界でアンカー照合(例 `/(^|\.)x\.com$/`)。sensitive 合計を `<all_urls>` の25点以下にキャップし、限定アクセスが全アクセスを上回らないようにする。
-- **検証**: `hostPermissionsRule` のテーブル駆動テストで `netflix.com`/`box.com`/`burbankca.gov` は無検出、`www.bankofamerica.com`/`x.com` は検出、10ホストでも合計 ≤ キャップ、`<all_urls>` は25点を維持。実装時に `test/rules.test.ts` の F-2 注記テストを修正後挙動へ更新。
-
-### Q7 / F-3: 偽装検知が正規 Google/Chrome 拡張を誤検知
-
-- **問題**: `suspicious-patterns.ts` の `/^google\s/i`・`/^chrome\s/i` が「Google Docs Offline」等のプリインストール拡張に +10「possible impersonation」を付ける。除外シグナル(`updateUrl` に `clients2.google.com` かつ `installType` が `normal`)は `metadata.ts` で既に計算済みだが未使用。
-- **要判断**: store 由来の正規拡張を除外すると、ストア配布の偽装マルウェアも除外されるトレードオフがある。除外を入れるか、現状維持(誤検知許容)か。
-- **デフォルト(回答なし)**: 現状維持。
-- **設計案(除外する場合)**: `updateUrl` が `clients2.google.com` を含み、かつ `installType === "normal"` のときのみ ^google/^chrome パターンを info/0 に降格。`metadataRule` のテストで「store由来は無検出/非store・sideload は +10維持」を固定。
-
-### Q8 / F-5: popup が Google Fonts を外部読み込み(プライバシー)
-
-- **問題**: `popup.html` が `fonts.googleapis.com`/`fonts.gstatic.com` に preconnect + stylesheet リンク。セキュリティ製品が popup を開くたび第三者へ通信する。dashboard はシステムフォントスタックで外部依存なし、と不統一。オフライン時はフォールバックフォントで表示は崩れない。`docs/POPUP_REDESIGN.md` はこのフォントを意図的設計として記録。
-- **本リファクタで未実施の理由**: ローカル同梱は WOFF2 のフェッチ・サブセット化・`@font-face` 追加・preload削除を伴い、視覚的同一性の確認にブラウザ実機が必要。サンドボックスでは検証不能のため、半端な変更を避け設計メモに留めた(指示書 Q8 の「フォント取得不能なら現状維持で報告」に準拠)。
-- **デフォルト方針(推奨)**: Fira Sans / Fira Code の必要ウェイトの WOFF2 を `public/` 配下に同梱し、`popup.css` にローカル `@font-face` を定義、`popup.html` の3つのリモート `<link>`(preconnect×2 + stylesheet)を削除。あわせて `docs/POPUP_REDESIGN.md` のフォント記述を更新。
-- **検証**: 再ビルドして拡張を読み込み、DevTools Network で popup を開いたとき拡張オリジン外への通信が(blocklist fetch 以外)ゼロであること。ネットワーク無効でフォント表示(または意図したフォールバック)を確認。
-- **代替案**: dashboard と同じシステムフォントスタックに統一(同梱不要だが見た目が変わる)。
+### E-5: release.yml の dispatch publish バイパス — ✅ 実装済み
+- **決定**: 修正する(供給網トラストに直結)。死んだ `version` input の削除だけでは不十分で、`Create GitHub Release` にガードが無く、ブランチからの `workflow_dispatch` がタグ/manifest 検証を**バイパスして未検証アーティファクトを公開**できた。
+- **実装**: 未使用 input 削除、publish を `if: startsWith(github.ref, 'refs/tags/')` で検証ステップと同一条件にゲート、`tag_name: ${{ github.ref_name }}` を明示ピン。dispatch はビルド/検証の dry run に限定。**残課題(別件)**: 署名/provenance(SLSA/Sigstore)は未対応。リリースノートの SHA-256 は同一ワークフローの自己申告であり、整合性アンカーではない。
 
 ---
 
-## 構造的負債(提案のみ)
+## 機能セマンティクス
 
-### C-8 / Q9: ScoredExtension の書き込み専用フィールド
+### Q1 / A-1: ブロックリスト取得先 — ✅ 解決済み(2026-06-14)
+`The-Privacy-Commons-Institute/chrome-mal-ids` の `data/current-list.json`(権威的後継、3000+ Chrome IOC、日次更新、CC BY 4.0、CORS `*`)に切替済み。`parseBlocklist` を新スキーマ対応に差し替え、実データでエンドツーエンド検証済み。詳細は上記 F-4 と git 履歴。
 
-- `src/shared/types.ts` の `ScoredExtension` のうち `type` / `description` / `homepageUrl` / `updateUrl` は保存されるが UI から読まれない。`scannedAt` は `ScanResult.scannedAt` と重複。
-- **デフォルト**: 保持(将来のUI表示用の可能性、保存データ形状への影響回避)。削除する場合も読み込み互換は壊れないが、`Stop And Ask` 条件(保存データ形状)に触れるため承認を得る。
+### Q2 / A-7: Allowlist / Dismiss セマンティクス — ✅ 実装済み(コア)
+- **決定(fail-safe 最優先)**:
+  1. **ガードレール(最重要)**: 既知悪性(blocklist/100/critical)拡張は **allowlist/dismiss で一切無効化できない**。UI で hard refusal、かつ通知側でも再判定(ストレージ改竄でも隠せない)。
+  2. **dismiss = 通知の抑制のみ**。バッジ・一覧・スコアは不変。
+  3. **allowlist = 通知抑制 + popup 脅威一覧から除外**。ただし dashboard には「Allowlisted」タグ + Undo で**可視・可逆**に残す。保存スコア/findings は不変(透明性)。
+  4. **バッジは常に full count**(最後の正直なシグナルはユーザー操作で消さない)。
+  5. **順序バグ修正 + 昇格通知**。
+- **実装**: `classification.ts`(`isBlocklisted`/`riskOrdinal`)、`notifier.ts` を「初出 OR リスク昇格で通知/未変化は再通知しない/blocklist は常時通知/suppression は初出のみ抑制(昇格は抑制を貫通)」に書き換え。dashboard にタグ+Undo+blocklist 拒否、popup に allowlist 除外。テスト追加。
+- **スコープの簡略化(ストレージ移行の回避)**: 決定仕様の「allow 時のリスク/スコアを保存して厳密に re-arm」は `UserPreferences` の形状変更(`Stop And Ask` 該当)を伴うため見送り、**「昇格は suppression を常に貫通して通知する」**という等価でより fail-safe な簡略版を採用。これによりストレージ移行なしで「allowlist が後の悪化を隠せない」を達成。厳密な状態保存版は将来の拡張(オーナー承認の上で `UserPreferences` にバージョン付き移行)に残す。
 
-### D-5: ScoringRule が chrome.management.ExtensionInfo に直結
+---
 
-- `scoring/types.ts` の `evaluate(ext: chrome.management.ExtensionInfo)` がルール層を Chrome API 型に結合。
-- **判断**: 現状でも ExtensionInfo はデータオブジェクトでありテスト可能(本リファクタで実証済み)。抽象を挟む利得は薄く、過剰抽象化のリスクの方が高い。**当面は現状維持**。ルール層を他データ源にも使う必要が出た時に、必要なフィールドだけの内部型へマッピングする層を再検討する。
+## 構造的負債
 
-### E-5: release.yml の workflow_dispatch 経路が不完全
+### C-8 / Q9: ScoredExtension の書き込み専用フィールド — 📝 現状維持
+- **決定**: 保持。`description`/`type`/`homepageUrl`/`updateUrl` と重複 `scannedAt` は拡張自身の公開メタデータであり、origin-scoped な `chrome.storage.local` に置いても PII・秘密・攻撃者有用情報の漏洩はない(`chrome.management` で再取得可能)。スコアリング・閾値・blocklist・通知・バッジのいずれにも作用せず、検出を弱めも偽装もしない。削除は無益で、保存形状変更のリスク(検証経路の新バグ面)だけ生む。将来の詳細表示や F-3 で `updateUrl`/`homepageUrl` を使う可能性もあり、前方互換で保持が妥当。型に「予約(未読込)」注記のみ。
 
-- `release.yml` の `workflow_dispatch.inputs.version` はどのステップからも参照されず、ブランチからの dispatch では release 作成が成立しない。
-- **判断**: dispatch でのリリースを正式サポートするか(タグ作成まで自動化する等)はリリースプロセスの設計判断。最小修正は未使用 input の削除。**提案のみ**。
+### D-5: ScoringRule が ExtensionInfo に直結 — 📝 現状維持
+- **決定**: 直結を維持。ルールの入力 `chrome.management.getAll()` は**信頼できる一次 API**であり、検証が要る境界(ネットワーク=A-4、ストレージ=D-4)は別途検証済み。手書きアダプタはサニタイズ価値ゼロで、フィールドの無言ドロップ=**fail-open**(例: `mayDisable` 取り違えで cannot-disable ルールを無効化)を tsc エラーなしに生む純負債。Chrome 型を単一の真実源にすることでフィールド改名/削除が tsc で検出される。ルールは flat な 9 フィールドしか参照しない(grep 確認済み)。将来「第二のデータ源」or「テストフィクスチャ負担」が出たら、**実 ExtensionInfo から導出する `Pick<>` 構造型**(無言ドロップ不可)で再検討。
 
-### B-7: getElementById の非nullアサーション
+---
 
-- `popup.ts` / `dashboard.ts` の `getElementById(...)!`。HTML の id が変わると初期化途中で全体が落ちる。
-- **本リファクタで見送った理由**: 任意・低優先。共有 `mustGetElement()` を入れると2ファイルの全取得箇所に波及し、DOM 依存を共有ユーティリティに持ち込む設計判断が要る。診断性の改善に留まり挙動は変えないため、優先度を下げて見送り。
-- **実装する場合**: UI 専用の小ヘルパー(例 `src/shared/dom.ts`)に `mustGetElement(id)` を置き、取得失敗時に id 入りで throw。挙動は同じ(従来も `!` で null 前提)だが診断メッセージが明確になる。
+## ロバスト性(非セキュリティ)
+
+### B-7: getElementById の非null アサーション — ✅ 実装済み
+- **決定**: `mustGetElement` ヘルパー導入。`!`/`as` はビルドで消去され、HTML id ドリフト時に「どの id が欠けたか」不明な遅延 null-deref になる。共有ヘルパーで起動時に id 入りで即 throw(自前の静的 HTML に対する fail-fast、ユーザーには fail-closed=半端な UI を見せない)。挙動保存。テスト追加。
