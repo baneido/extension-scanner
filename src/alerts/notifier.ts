@@ -46,16 +46,25 @@ export async function notifyNewThreats(
 
     const prev = previousById.get(ext.id);
     const firstSeen = prev === undefined;
-    // Notify on first sight or when the risk LEVEL worsened vs the last scan.
-    // Unchanged threats are not re-notified every scan (fatigue fix), and this
-    // is what makes green->red / yellow->red escalations notify (Debt Map A-7).
+    const nowBlocklisted = isBlocklisted(ext);
+    const newlyBlocklisted =
+      nowBlocklisted && !(prev !== undefined && isBlocklisted(prev));
+
+    // Notify on first sight, when the risk LEVEL worsened, or when the
+    // extension just landed on the blocklist. The blocklist transition is a
+    // distinct escalation signal because an already-red extension that becomes
+    // KNOWN MALWARE does not change risk level, yet is materially worse and
+    // must never be hidden (Debt Map Q2/A-7). Unchanged threats are not
+    // re-notified every scan (fatigue fix).
     const worsened =
-      firstSeen || riskOrdinal(ext.riskLevel) > riskOrdinal(prev.riskLevel);
+      firstSeen ||
+      riskOrdinal(ext.riskLevel) > riskOrdinal(prev.riskLevel) ||
+      newlyBlocklisted;
     if (!worsened) continue;
 
     // Known-malware always notifies, bypassing any dismiss/allowlist entry —
     // the suppression controls can never hide a blocklisted extension (Q2).
-    if (!isBlocklisted(ext)) {
+    if (!nowBlocklisted) {
       // Otherwise, dismiss/allowlist suppress only the FIRST-seen alert; an
       // escalation of a suppressed extension still notifies (its state changed).
       const suppressed =
@@ -64,16 +73,36 @@ export async function notifyNewThreats(
       if (firstSeen && suppressed) continue;
     }
 
-    notifyThreat(ext, firstSeen, prev);
+    const kind: ThreatKind = newlyBlocklisted
+      ? "blocklisted"
+      : firstSeen
+        ? "first-seen"
+        : "escalation";
+    notifyThreat(ext, kind, prev);
   }
 }
 
+type ThreatKind = "first-seen" | "escalation" | "blocklisted";
+
 function notifyThreat(
   ext: ScoredExtension,
-  firstSeen: boolean,
+  kind: ThreatKind,
   prev: ScoredExtension | undefined
 ): void {
   const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
+
+  if (kind === "blocklisted") {
+    createNotification(`blocklist-${ext.id}`, {
+      type: "basic",
+      iconUrl,
+      title: "Known Malware Confirmed",
+      message: `"${ext.name}" is on the known-malware blocklist (Score: ${ext.totalScore}). Click to review.`,
+      priority: 2,
+    });
+    return;
+  }
+
+  const firstSeen = kind === "first-seen";
   const escalationSuffix =
     !firstSeen && prev
       ? ` (was ${prev.riskLevel}, score ${prev.totalScore} -> ${ext.totalScore})`

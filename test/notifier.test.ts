@@ -89,27 +89,42 @@ describe("notifyNewThreats", () => {
     expect(createSpy.mock.calls[0][0]).toBe("escalation-esc");
   });
 
+  const blocklistMatch = {
+    ruleId: "blocklist-match",
+    category: "blocklist",
+    description: "",
+    score: 100,
+    severity: "critical" as const,
+  };
+
   it("Q2 guardrail: a blocklisted extension notifies even if allowlisted+dismissed", async () => {
     installChrome({ customAllowlist: ["bad"], dismissedExtensionIds: ["bad"] });
     const prev = result([]);
     const curr = result([
+      scored({ id: "bad", riskLevel: "red", ruleResults: [blocklistMatch] }),
+    ]);
+    await notifyNewThreats(prev, curr);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy.mock.calls[0][0]).toBe("blocklist-bad");
+  });
+
+  it("Q2 guardrail: an already-red extension that newly lands on the blocklist still notifies", async () => {
+    // red -> red transition: risk level is unchanged, so this only notifies
+    // because newly-blocklisted is treated as its own escalation signal.
+    const prev = result([
+      scored({ id: "x", riskLevel: "red", totalScore: 75, ruleResults: [] }),
+    ]);
+    const curr = result([
       scored({
-        id: "bad",
+        id: "x",
         riskLevel: "red",
-        ruleResults: [
-          {
-            ruleId: "blocklist-match",
-            category: "blocklist",
-            description: "",
-            score: 100,
-            severity: "critical",
-          },
-        ],
+        totalScore: 100,
+        ruleResults: [blocklistMatch],
       }),
     ]);
     await notifyNewThreats(prev, curr);
     expect(createSpy).toHaveBeenCalledTimes(1);
-    expect(createSpy.mock.calls[0][0]).toBe("threat-bad");
+    expect(createSpy.mock.calls[0][0]).toBe("blocklist-x");
   });
 
   it("does not notify for a new yellow extension under default prefs", async () => {
