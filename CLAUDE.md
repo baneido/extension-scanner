@@ -95,7 +95,7 @@ After building, load the unpacked extension from the `dist/` directory in Chrome
 1. Create new file in `src/scoring/rules/` implementing `ScoringRule` interface
 2. Export rule instance from `src/scoring/rules/index.ts` in `allRules` array
 3. Define scoring logic in `evaluate()` method returning `RuleResult[]`
-4. Use severity levels: `critical` (50-100), `high` (20-49), `medium` (10-19), `low` (1-9), `info` (0)
+4. Set `severity` as a display-only label, assigned independently of `score`. It drives the badge color in the dashboard finding list (`dashboard.ts` + `dashboard.css`) and is **not** used in score aggregation. Existing rules assign it by their own judgment (e.g. `<all_urls>` is `score: 25` / `severity: "critical"`), so pick the level that best communicates the finding rather than deriving it from the score.
 
 ## Common Patterns
 
