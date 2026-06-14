@@ -1,10 +1,6 @@
-import type {
-  ScanResult,
-  ScoredExtension,
-  RiskLevel,
-  UserPreferences,
-} from "../shared/types";
+import type { ScanResult, ScoredExtension, RiskLevel } from "../shared/types";
 import { timeAgo, largestIconUrl } from "../shared/utils";
+import { loadPreferences, updatePreferences } from "../storage/store";
 
 // --- State ---
 let currentResult: ScanResult | null = null;
@@ -200,26 +196,15 @@ async function handleAction(action: string, extId: string): Promise<void> {
     // Re-scan after disabling
     btnScan.click();
   } else if (action === "dismiss" || action === "allowlist") {
-    const data = await chrome.storage.local.get("userPreferences");
-    const prefs: UserPreferences = data["userPreferences"] ?? {
-      scanIntervalMinutes: 60,
-      notifyOnNewRedExtension: true,
-      notifyOnNewYellowExtension: false,
-      dismissedExtensionIds: [],
-      customAllowlist: [],
-    };
-
-    if (action === "dismiss") {
-      if (!prefs.dismissedExtensionIds.includes(extId)) {
-        prefs.dismissedExtensionIds.push(extId);
+    await updatePreferences((prefs) => {
+      const list =
+        action === "dismiss"
+          ? prefs.dismissedExtensionIds
+          : prefs.customAllowlist;
+      if (!list.includes(extId)) {
+        list.push(extId);
       }
-    } else {
-      if (!prefs.customAllowlist.includes(extId)) {
-        prefs.customAllowlist.push(extId);
-      }
-    }
-
-    await chrome.storage.local.set({ userPreferences: prefs });
+    });
   }
 }
 
@@ -258,26 +243,16 @@ prefNotifyRed.addEventListener("change", () => savePrefs());
 prefNotifyYellow.addEventListener("change", () => savePrefs());
 
 async function savePrefs(): Promise<void> {
-  const data = await chrome.storage.local.get("userPreferences");
-  const prefs: UserPreferences = data["userPreferences"] ?? {
-    scanIntervalMinutes: 60,
-    notifyOnNewRedExtension: true,
-    notifyOnNewYellowExtension: false,
-    dismissedExtensionIds: [],
-    customAllowlist: [],
-  };
-  prefs.notifyOnNewRedExtension = prefNotifyRed.checked;
-  prefs.notifyOnNewYellowExtension = prefNotifyYellow.checked;
-  await chrome.storage.local.set({ userPreferences: prefs });
+  await updatePreferences((prefs) => {
+    prefs.notifyOnNewRedExtension = prefNotifyRed.checked;
+    prefs.notifyOnNewYellowExtension = prefNotifyYellow.checked;
+  });
 }
 
 async function loadPrefs(): Promise<void> {
-  const data = await chrome.storage.local.get("userPreferences");
-  const prefs = data["userPreferences"] as UserPreferences | undefined;
-  if (prefs) {
-    prefNotifyRed.checked = prefs.notifyOnNewRedExtension;
-    prefNotifyYellow.checked = prefs.notifyOnNewYellowExtension;
-  }
+  const prefs = await loadPreferences();
+  prefNotifyRed.checked = prefs.notifyOnNewRedExtension;
+  prefNotifyYellow.checked = prefs.notifyOnNewYellowExtension;
 }
 
 // --- Init ---

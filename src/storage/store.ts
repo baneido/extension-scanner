@@ -31,3 +31,16 @@ export async function savePreferences(
 ): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.PREFERENCES]: prefs });
 }
+
+/**
+ * Load preferences, apply a mutation, and persist the result.
+ * Single source of the load-modify-save sequence used by the dashboard.
+ */
+export async function updatePreferences(
+  mutate: (prefs: UserPreferences) => void
+): Promise<UserPreferences> {
+  const prefs = await loadPreferences();
+  mutate(prefs);
+  await savePreferences(prefs);
+  return prefs;
+}
