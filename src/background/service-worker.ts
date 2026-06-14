@@ -73,14 +73,25 @@ chrome.management.onDisabled.addListener(async () => {
 // 5. Message handler for popup/dashboard
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "GET_SCAN_RESULT") {
-    loadScanResult().then(sendResponse);
+    loadScanResult()
+      .then(sendResponse)
+      .catch((error) => {
+        console.error("[ExtScanner] GET_SCAN_RESULT failed:", error);
+        sendResponse(null);
+      });
     return true;
   }
   if (message.type === "RUN_SCAN") {
-    initBlocklist()
-      .then(() => performScan())
+    // performScan() initializes the blocklist itself (see A-2). The catch
+    // guarantees sendResponse fires even on failure, so the popup's Scan
+    // button is never left stuck on "Scanning..." (Debt Map B-1).
+    performScan()
       .then(() => loadScanResult())
-      .then(sendResponse);
+      .then(sendResponse)
+      .catch((error) => {
+        console.error("[ExtScanner] RUN_SCAN failed:", error);
+        sendResponse(null);
+      });
     return true;
   }
   if (message.type === "OPEN_DASHBOARD") {
