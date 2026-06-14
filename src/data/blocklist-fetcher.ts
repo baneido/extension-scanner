@@ -46,6 +46,37 @@ export async function refreshBlocklist(): Promise<
   }
 }
 
+// Reject obviously-wrong responses before they overwrite a good cache.
+const MAX_BLOCKLIST_BYTES = 5_000_000;
+
+/**
+ * Parse the remote blocklist payload (a JSON array of extension ID strings)
+ * into a Map. Throws on a non-array payload or one with zero valid IDs, so an
+ * empty or wrong-shaped response is treated as a failure (preserving the last
+ * good cache) rather than a successful empty blocklist (Debt Map A-4).
+ */
+export function parseBlocklist(data: unknown): Map<string, BlocklistEntry> {
+  if (!Array.isArray(data)) {
+    throw new Error("Blocklist response was not a JSON array");
+  }
+
+  const list = new Map<string, BlocklistEntry>();
+  for (const id of data) {
+    if (typeof id === "string" && id.length > 0) {
+      list.set(id, {
+        reason: "Known malicious extension (chrome-mal-ids)",
+        source: "chrome-mal-ids",
+      });
+    }
+  }
+
+  if (list.size === 0) {
+    throw new Error("Blocklist response contained no valid extension IDs");
+  }
+
+  return list;
+}
+
 async function fetchRemoteBlocklist(): Promise<
   Map<string, BlocklistEntry>
 > {
@@ -54,19 +85,12 @@ async function fetchRemoteBlocklist(): Promise<
     throw new Error(`Blocklist fetch failed: ${response.status}`);
   }
 
-  const data: unknown = await response.json();
-  const list = new Map<string, BlocklistEntry>();
-
-  // The chrome-mal-ids repo provides a JSON array of extension IDs
-  if (Array.isArray(data)) {
-    for (const id of data) {
-      if (typeof id === "string") {
-        list.set(id, { reason: "Known malicious extension (chrome-mal-ids)", source: "chrome-mal-ids" });
-      }
-    }
+  const text = await response.text();
+  if (text.length > MAX_BLOCKLIST_BYTES) {
+    throw new Error(`Blocklist response too large: ${text.length} bytes`);
   }
 
-  return list;
+  return parseBlocklist(JSON.parse(text));
 }
 
 interface CachedBlocklist {
