@@ -292,16 +292,31 @@ describe("metadataRule", () => {
     );
   });
 
-  it("flags impersonation name patterns", () => {
-    expect(metadataRule.evaluate(makeExt({ name: "Google Docs" }))).toContainEqual(
-      {
+  it("Debt Map F-3: does NOT flag impersonation for genuine store/admin installs", () => {
+    for (const installType of ["normal", "admin"]) {
+      const result = metadataRule.evaluate(
+        makeExt({ name: "Google Docs", installType })
+      );
+      expect(result.some((r) => r.ruleId === "meta-name-impersonation-google")).toBe(
+        false
+      );
+    }
+  });
+
+  it("Debt Map F-3: flags impersonation for sideloaded/dev (off-store) installs", () => {
+    for (const installType of ["sideload", "development"]) {
+      const result = metadataRule.evaluate(
+        makeExt({ name: "Google Antivirus", installType })
+      );
+      expect(result).toContainEqual({
         ruleId: "meta-name-impersonation-google",
         category: "metadata",
-        description: "Name starts with 'Google' - possible impersonation",
+        description:
+          "Name starts with 'Google' on a non-store install - possible impersonation",
         score: 10,
         severity: "high",
-      }
-    );
+      });
+    }
   });
 
   it("flags an extension the user cannot disable", () => {
