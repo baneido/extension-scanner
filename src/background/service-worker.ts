@@ -94,6 +94,12 @@ async function initBlocklist(): Promise<void> {
 }
 
 async function performScan(): Promise<void> {
+  // Always (re)load the blocklist into the scoring rule before scanning. MV3
+  // terminates the worker between events, so module state may be empty; without
+  // this, scans woken by management on{Enabled,Disabled,Uninstalled} would run
+  // with the 100-point blocklist rule disabled (Debt Map A-2). getBlocklist()
+  // serves the cache when fresh, so this is a storage read, not a refetch.
+  await initBlocklist();
   const previousResult = await loadScanResult();
   const newResult = await runFullScan();
   await saveScanResult(newResult);
