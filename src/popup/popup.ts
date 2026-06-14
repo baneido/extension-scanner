@@ -7,7 +7,6 @@ const badgeRedEl = document.getElementById("badge-red")!;
 const badgeYellowEl = document.getElementById("badge-yellow")!;
 const badgeGreenEl = document.getElementById("badge-green")!;
 const threatsEl = document.getElementById("threats")!;
-const loadingEl = document.getElementById("loading")!;
 const btnScan = document.getElementById("btn-scan") as HTMLButtonElement;
 const btnDashboard = document.getElementById(
   "btn-dashboard"
