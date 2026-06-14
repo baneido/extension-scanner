@@ -35,6 +35,12 @@ const SENSITIVE_PER_HOST = 8;
 // always dominates narrowly-scoped sensitive access (least-privilege ordering).
 const SENSITIVE_CAP = 24;
 
+/** Whether a match pattern's host authority uses a "*." subdomain wildcard. */
+function hasWildcardSubdomain(pattern: string): boolean {
+  const m = /^[a-z*]+:\/\/([^/]+)/i.exec(pattern);
+  return m ? m[1]!.startsWith("*.") : false;
+}
+
 /** Extract and normalize the host authority from a match pattern, or null. */
 function patternHost(pattern: string): string | null {
   const m = /^[a-z*]+:\/\/([^/]+)\//i.exec(pattern);
@@ -83,8 +89,9 @@ export const hostPermissionsRule: ScoringRule = {
       (h) => !ALL_URLS_PATTERNS.includes(h)
     );
 
-    // Wildcard subdomains
-    const wildcardDomains = specificDomains.filter((h) => h.includes("*."));
+    // Wildcard subdomains: detect "*." in the host AUTHORITY, not anywhere in
+    // the raw pattern — a path glob like "/*.json" is not a subdomain wildcard.
+    const wildcardDomains = specificDomains.filter(hasWildcardSubdomain);
     if (wildcardDomains.length > 0) {
       results.push({
         ruleId: "host-wildcard-subdomains",

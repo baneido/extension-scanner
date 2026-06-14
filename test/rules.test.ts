@@ -234,6 +234,15 @@ describe("hostPermissionsRule", () => {
     expect(allUrls[0]!.score).toBeGreaterThan(sensitive.score);
   });
 
+  it("does not treat a path glob as a wildcard subdomain (review fix)", () => {
+    // "/*.json" contains "*." in the PATH, not the host — must not flag.
+    expect(
+      hostPermissionsRule.evaluate(
+        makeExt({ hostPermissions: ["https://example.com/*.json"] })
+      )
+    ).toEqual([]);
+  });
+
   it("returns nothing when there are no host permissions", () => {
     expect(hostPermissionsRule.evaluate(makeExt({ hostPermissions: [] }))).toEqual(
       []

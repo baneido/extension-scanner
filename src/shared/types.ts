@@ -8,7 +8,7 @@ export interface BlocklistEntry {
 export interface BlocklistStatus {
   // Time of the last successful refresh, or null if never refreshed.
   updatedAt: number | null;
-  // Entries from the last successful fetch.
+  // Entries in the list currently in use (live, cache, or fallback snapshot).
   count: number;
   // Whether the most recent fetch attempt succeeded.
   lastFetchOk: boolean;

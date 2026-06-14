@@ -38,6 +38,14 @@ export async function getBlocklist(): Promise<
 > {
   const cached = await loadCachedBlocklist();
   if (cached && !isCacheExpired(cached.updatedAt)) {
+    // Serving a still-fresh cache (no fetch). Reflect that in the status so the
+    // freshness indicator is correct even on a profile that never refetches,
+    // including after upgrading from a version that had no status (Debt Map F-4).
+    await recordStatus({
+      updatedAt: cached.updatedAt,
+      count: cached.list.size,
+      lastFetchOk: true,
+    });
     return cached.list;
   }
 
@@ -58,9 +66,15 @@ export async function getBlocklist(): Promise<
       "[ExtScanner] Blocklist fetch failed; using cache/fallback:",
       error
     );
-    await recordStatus({ lastFetchOk: false, lastAttemptAt: Date.now() });
-    if (cached) return cached.list;
-    return FALLBACK_MALICIOUS_IDS;
+    // count reflects the list actually serving (cache or snapshot), so the UI
+    // does not read "0 entries" while the fallback is scoring (Debt Map F-4).
+    const serving = cached ? cached.list : FALLBACK_MALICIOUS_IDS;
+    await recordStatus({
+      lastFetchOk: false,
+      lastAttemptAt: Date.now(),
+      count: serving.size,
+    });
+    return serving;
   }
 }
 
