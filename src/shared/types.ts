@@ -48,6 +48,9 @@ export interface ScanResult {
 }
 
 export interface UserPreferences {
+  // Reserved / not yet wired up: scans use the fixed SCAN_INTERVAL_MINUTES
+  // constant, not this field. Kept for storage compatibility and a future
+  // user-configurable interval (Debt Map C-7 / Q4). See docs/refactor-followups.md.
   scanIntervalMinutes: number;
   notifyOnNewRedExtension: boolean;
   notifyOnNewYellowExtension: boolean;
