@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Detects potentially malicious Chrome extensions installed in your browser",
   "permissions": ["management", "storage", "alarms", "notifications"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self'; font-src 'self'"
+  },
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"

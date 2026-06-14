@@ -21,7 +21,7 @@
 }
 
 body {
-  font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: #0c4a6e;
@@ -85,7 +85,7 @@ body {
 }
 
 .title {
-  font-family: 'Fira Code', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 18px;
   font-weight: 600;
   color: #f0f9ff;
@@ -94,7 +94,7 @@ body {
 }
 
 .scan-time {
-  font-family: 'Fira Code', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11px;
   color: #64748b;
   letter-spacing: 0.02em;
@@ -185,7 +185,7 @@ body {
 }
 
 .status-count {
-  font-family: 'Fira Code', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 24px;
   font-weight: 600;
   line-height: 1;
@@ -338,7 +338,7 @@ body {
 .threat-score {
   font-size: 11px;
   color: #94a3b8;
-  font-family: 'Fira Code', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 .threat-score-value {
@@ -370,7 +370,7 @@ body {
   padding: 12px 16px;
   border: none;
   border-radius: 10px;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
