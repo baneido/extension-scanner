@@ -15,7 +15,13 @@ export const STORAGE_KEYS = {
   PREFERENCES: "userPreferences",
   BLOCKLIST_CACHE: "blocklistCache",
   BLOCKLIST_UPDATED_AT: "blocklistUpdatedAt",
+  BLOCKLIST_STATUS: "blocklistStatus",
 } as const;
+
+// A blocklist not successfully refreshed within this window is shown as stale.
+// Well past the 24h update interval so transient outages don't cry wolf, but
+// short enough to catch a dead source (Debt Map F-4).
+export const BLOCKLIST_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Authoritative, actively-maintained successor to the original mallorybowes /
 // nicoleahmed chrome-mal-ids list, now curated by The Privacy Commons Institute

@@ -3,8 +3,31 @@ import {
   STORAGE_KEYS,
   BLOCKLIST_UPDATE_INTERVAL_MINUTES,
 } from "../shared/constants";
-import type { BlocklistEntry } from "../shared/types";
+import type { BlocklistEntry, BlocklistStatus } from "../shared/types";
 import { FALLBACK_MALICIOUS_IDS } from "./blocklist-fallback";
+
+const DEFAULT_STATUS: BlocklistStatus = {
+  updatedAt: null,
+  count: 0,
+  lastFetchOk: false,
+  lastAttemptAt: null,
+};
+
+/** Read the persisted blocklist freshness status (Debt Map F-4). */
+export async function getBlocklistStatus(): Promise<BlocklistStatus> {
+  const data = await chrome.storage.local.get(STORAGE_KEYS.BLOCKLIST_STATUS);
+  const raw = data[STORAGE_KEYS.BLOCKLIST_STATUS] as
+    | Partial<BlocklistStatus>
+    | undefined;
+  return { ...DEFAULT_STATUS, ...(raw ?? {}) };
+}
+
+async function recordStatus(patch: Partial<BlocklistStatus>): Promise<void> {
+  const current = await getBlocklistStatus();
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.BLOCKLIST_STATUS]: { ...current, ...patch },
+  });
+}
 
 /**
  * Fetch the latest blocklist from GitHub and cache it in chrome.storage.local.
@@ -21,6 +44,12 @@ export async function getBlocklist(): Promise<
   try {
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
+    await recordStatus({
+      updatedAt: Date.now(),
+      count: freshList.size,
+      lastFetchOk: true,
+      lastAttemptAt: Date.now(),
+    });
     return freshList;
   } catch (error) {
     // Network/parse error - use cache if available, otherwise fallback.
@@ -29,6 +58,7 @@ export async function getBlocklist(): Promise<
       "[ExtScanner] Blocklist fetch failed; using cache/fallback:",
       error
     );
+    await recordStatus({ lastFetchOk: false, lastAttemptAt: Date.now() });
     if (cached) return cached.list;
     return FALLBACK_MALICIOUS_IDS;
   }
@@ -43,12 +73,19 @@ export async function refreshBlocklist(): Promise<
   try {
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
+    await recordStatus({
+      updatedAt: Date.now(),
+      count: freshList.size,
+      lastFetchOk: true,
+      lastAttemptAt: Date.now(),
+    });
     return freshList;
   } catch (error) {
     console.warn(
       "[ExtScanner] Blocklist refresh failed; using cache/fallback:",
       error
     );
+    await recordStatus({ lastFetchOk: false, lastAttemptAt: Date.now() });
     const cached = await loadCachedBlocklist();
     if (cached) return cached.list;
     return FALLBACK_MALICIOUS_IDS;

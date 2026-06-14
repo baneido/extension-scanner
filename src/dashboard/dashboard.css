@@ -238,6 +238,17 @@ body {
   text-overflow: ellipsis;
 }
 
+.blocklist-status {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
+.blocklist-status.stale {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .ext-tag {
   display: inline-block;
   margin-left: 8px;

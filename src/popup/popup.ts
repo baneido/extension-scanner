@@ -2,6 +2,7 @@ import type { ScoredExtension } from "../shared/types";
 import {
   sendExtMessage,
   type ScanResultResponse,
+  type BlocklistStatusResponse,
 } from "../shared/messages";
 import { isBlocklisted } from "../scoring/classification";
 import { loadPreferences } from "../storage/store";
@@ -10,6 +11,7 @@ import {
   largestIconUrl,
   escapeHtml,
   mustGetElement,
+  isBlocklistStale,
 } from "../shared/utils";
 
 // Extensions the user has allowlisted are hidden from the popup threat list
@@ -22,8 +24,30 @@ const badgeRedEl = mustGetElement("badge-red");
 const badgeYellowEl = mustGetElement("badge-yellow");
 const badgeGreenEl = mustGetElement("badge-green");
 const threatsEl = mustGetElement("threats");
+const blocklistStatusEl = mustGetElement("blocklist-status");
 const btnScan = mustGetElement<HTMLButtonElement>("btn-scan");
 const btnDashboard = mustGetElement<HTMLButtonElement>("btn-dashboard");
+
+/** Show a compact blocklist freshness indicator (Debt Map F-4). */
+async function renderBlocklistStatus(): Promise<void> {
+  let status: BlocklistStatusResponse | null = null;
+  try {
+    status = (await sendExtMessage({
+      type: "GET_BLOCKLIST_STATUS",
+    })) as BlocklistStatusResponse | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load blocklist status:", error);
+  }
+  if (!status) {
+    blocklistStatusEl.textContent = "";
+    return;
+  }
+  const stale = isBlocklistStale(status, Date.now());
+  blocklistStatusEl.textContent = stale
+    ? "⚠ Blocklist stale"
+    : `Blocklist: ${status.count}`;
+  blocklistStatusEl.classList.toggle("stale", stale);
+}
 
 /**
  * Render scan results to the popup UI
@@ -177,6 +201,7 @@ function setButtonLoading(loading: boolean): void {
     console.error("[ExtScanner] Failed to load scan result:", error);
     renderScanResult(null);
   }
+  void renderBlocklistStatus();
 })();
 
 // Scan Now button

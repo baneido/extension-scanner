@@ -5,6 +5,17 @@ export interface BlocklistEntry {
   source: string;
 }
 
+export interface BlocklistStatus {
+  // Time of the last successful refresh, or null if never refreshed.
+  updatedAt: number | null;
+  // Entries from the last successful fetch.
+  count: number;
+  // Whether the most recent fetch attempt succeeded.
+  lastFetchOk: boolean;
+  // Time of the most recent fetch attempt (success or failure), or null.
+  lastAttemptAt: number | null;
+}
+
 export interface RuleResult {
   ruleId: string;
   category: string;

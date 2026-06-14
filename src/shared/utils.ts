@@ -40,6 +40,22 @@ export function largestIconUrl(
   return icons.length > 0 ? icons[icons.length - 1]!.url : "";
 }
 
+import type { BlocklistStatus } from "./types";
+import { BLOCKLIST_STALE_AFTER_MS } from "./constants";
+
+/**
+ * Whether the blocklist should be shown as degraded: never refreshed, the last
+ * refresh is older than the staleness budget, or the most recent fetch failed.
+ */
+export function isBlocklistStale(
+  status: BlocklistStatus,
+  now: number
+): boolean {
+  if (status.updatedAt === null) return true;
+  if (now - status.updatedAt > BLOCKLIST_STALE_AFTER_MS) return true;
+  return !status.lastFetchOk;
+}
+
 export function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
   if (seconds < 60) return `${seconds} second(s) ago`;

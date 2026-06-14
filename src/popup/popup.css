@@ -100,6 +100,17 @@ body {
   letter-spacing: 0.02em;
 }
 
+.blocklist-status {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #64748b;
+}
+.blocklist-status.stale {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
 /* === Security Status Summary === */
 .summary {
   display: grid;

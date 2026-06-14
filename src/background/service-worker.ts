@@ -1,6 +1,10 @@
 import { runFullScan } from "../scoring/engine";
 import { setBlocklistData } from "../scoring/rules/blocklist";
-import { getBlocklist, refreshBlocklist } from "../data/blocklist-fetcher";
+import {
+  getBlocklist,
+  refreshBlocklist,
+  getBlocklistStatus,
+} from "../data/blocklist-fetcher";
 import { saveScanResult, loadScanResult } from "../storage/store";
 import { updateBadge, notifyNewThreats } from "../alerts/notifier";
 import {
@@ -98,6 +102,15 @@ chrome.runtime.onMessage.addListener((message: ExtMessage, _sender, sendResponse
       .then(sendResponse)
       .catch((error) => {
         console.error("[ExtScanner] RUN_SCAN failed:", error);
+        sendResponse(null);
+      });
+    return true;
+  }
+  if (message.type === "GET_BLOCKLIST_STATUS") {
+    getBlocklistStatus()
+      .then(sendResponse)
+      .catch((error) => {
+        console.error("[ExtScanner] GET_BLOCKLIST_STATUS failed:", error);
         sendResponse(null);
       });
     return true;

@@ -1,11 +1,15 @@
 import type { ScanResult, ScoredExtension, RiskLevel } from "../shared/types";
-import { sendExtMessage } from "../shared/messages";
+import {
+  sendExtMessage,
+  type BlocklistStatusResponse,
+} from "../shared/messages";
 import { isBlocklisted } from "../scoring/classification";
 import {
   timeAgo,
   largestIconUrl,
   escapeHtml,
   mustGetElement,
+  isBlocklistStale,
 } from "../shared/utils";
 import { loadPreferences, updatePreferences } from "../storage/store";
 
@@ -37,6 +41,29 @@ const filterBtns = document.querySelectorAll<HTMLButtonElement>(".filter-btn");
 
 const prefNotifyRed = mustGetElement<HTMLInputElement>("pref-notify-red");
 const prefNotifyYellow = mustGetElement<HTMLInputElement>("pref-notify-yellow");
+const blocklistStatusEl = mustGetElement("blocklist-status");
+
+async function renderBlocklistStatus(): Promise<void> {
+  let status: BlocklistStatusResponse | null = null;
+  try {
+    status = (await sendExtMessage({
+      type: "GET_BLOCKLIST_STATUS",
+    })) as BlocklistStatusResponse | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load blocklist status:", error);
+  }
+  if (!status) {
+    blocklistStatusEl.textContent = "";
+    return;
+  }
+  const stale = isBlocklistStale(status, Date.now());
+  const updated =
+    status.updatedAt !== null ? timeAgo(status.updatedAt) : "never";
+  blocklistStatusEl.textContent = `Blocklist: ${status.count} entries · updated ${updated}${
+    stale ? " · ⚠ stale or unavailable" : ""
+  }`;
+  blocklistStatusEl.classList.toggle("stale", stale);
+}
 
 // --- Rendering ---
 function render(): void {
@@ -285,6 +312,7 @@ btnScan.addEventListener("click", async () => {
     const result = await sendExtMessage({ type: "RUN_SCAN" });
     currentResult = result as ScanResult | null;
     render();
+    void renderBlocklistStatus();
   } catch (error) {
     console.error("[ExtScanner] Scan failed:", error);
   } finally {
@@ -325,5 +353,6 @@ async function loadPrefs(): Promise<void> {
     currentResult = null;
   }
   render();
+  void renderBlocklistStatus();
 })();
 loadPrefs();
