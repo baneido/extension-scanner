@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "chrome-types": "^0.1.415",
     "typescript": "^5.9.3",
