@@ -17,5 +17,10 @@ export const STORAGE_KEYS = {
   BLOCKLIST_UPDATED_AT: "blocklistUpdatedAt",
 } as const;
 
+// Authoritative, actively-maintained successor to the original mallorybowes /
+// nicoleahmed chrome-mal-ids list, now curated by The Privacy Commons Institute
+// (3000+ Chrome IOCs, daily updates, CC BY 4.0). Served with
+// Access-Control-Allow-Origin: * so the worker can fetch it cross-origin
+// without host_permissions. See docs/refactor-followups.md (Q1).
 export const BLOCKLIST_SOURCE_URL =
-  "https://raw.githubusercontent.com/nicoleahmed/chrome-mal-ids/refs/heads/main/mal-ids.json";
+  "https://raw.githubusercontent.com/The-Privacy-Commons-Institute/chrome-mal-ids/refs/heads/master/data/current-list.json";

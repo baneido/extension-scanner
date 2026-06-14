@@ -65,8 +65,8 @@ After building, load the unpacked extension from the `dist/` directory in Chrome
 
 ### Blocklist Management
 
-- Primary source: GitHub repo `nicoleahmed/chrome-mal-ids` (daily updates)
-- Fallback: Local `blocklist-fallback.ts` if network fails
+- Primary source: GitHub repo `The-Privacy-Commons-Institute/chrome-mal-ids` (`data/current-list.json`, daily updates). The JSON is `{ meta, extensions: [{ ext_id, browser, date_added, source, ... }] }`; `parseBlocklist()` keeps non-edge entries. CC BY 4.0.
+- Fallback: Local `blocklist-fallback.ts` if network fails (currently empty — see docs/refactor-followups.md F-4)
 - Cache: Stored in `chrome.storage.local` with 24-hour TTL
 - Updates: Automatic via alarm or manual via popup "Scan Now"
 

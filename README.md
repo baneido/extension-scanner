@@ -117,7 +117,7 @@ Each extension is evaluated against multiple rules:
 #### Blocklist Source
 
 The extension fetches the latest malicious extension IDs from:
-- Primary: [chrome-mal-ids](https://github.com/nicoleahmed/chrome-mal-ids) (updated daily)
+- Primary: [chrome-mal-ids](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids) (The Privacy Commons Institute, updated daily)
 - Fallback: Local cache with embedded defaults
 
 ### 🛠️ Development
@@ -204,7 +204,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### 🙏 Acknowledgments
 
-- [chrome-mal-ids](https://github.com/nicoleahmed/chrome-mal-ids) - Community-maintained malicious extension database
+- [chrome-mal-ids](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids) - Community-maintained malicious extension IOC database by The Privacy Commons Institute (CC BY 4.0)
 - [Heroicons](https://heroicons.com/) - Beautiful SVG icons
 - [Fira Code](https://github.com/tonsky/FiraCode) & [Fira Sans](https://fonts.google.com/specimen/Fira+Sans) - Typography
 
@@ -314,7 +314,7 @@ Extension Scannerは、インストールされているChrome拡張機能を分
 #### ブロックリストのソース
 
 拡張機能は以下から最新の悪意のある拡張機能IDを取得します：
-- プライマリ: [chrome-mal-ids](https://github.com/nicoleahmed/chrome-mal-ids)（毎日更新）
+- プライマリ: [chrome-mal-ids](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids)（The Privacy Commons Institute、毎日更新）
 - フォールバック: 埋め込みデフォルトを含むローカルキャッシュ
 
 ### 🛠️ 開発

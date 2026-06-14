@@ -6,17 +6,25 @@
 
 ---
 
-## ブロッカー(回答が出るまで実装禁止)
+## ブロッカー
 
-### Q1 / A-1 / F-4: ブロックリスト取得先が404、信頼モデルも要設計
+### Q1 / A-1: ブロックリスト取得先 — ✅ 解決(2026-06-14)
 
-- **現状**: `src/shared/constants.ts` の `BLOCKLIST_SOURCE_URL`(`nicoleahmed/chrome-mal-ids`)は 2026-06-14 時点で **HTTP 404**。後継 `The-Privacy-Commons-Institute/chrome-mal-ids` は STIX/MISP 形式で、現在のパーサ(JSON 文字列配列)とは非互換。フォールバック(`blocklist-fallback.ts`)は空。
-- **本リファクタで実施済みの緩和**: 失敗のログ化(B-3)、空・不正応答を成功扱いしない(A-4)、`parseBlocklist()` の単体テスト化。これにより「404 が無言で 100点ルールを無効化する」状態は**可視化**された(SW コンソールに警告が出る)が、**ブロックリスト自体は依然として空**。
-- **要判断**:
-  1. 採用する取得先と形式(後継リポジトリの STIX/MISP を変換するアダプタを書くか、別ソースか、CI でビルド時にスナップショットを同梱するか)。
-  2. 信頼モデル: 単一の非認証 raw GitHub URL に「Known malicious(100点)」判定を全面依存してよいか。整合性チェック(ハッシュ/署名)や複数ソース照合の要否。
-  3. `FALLBACK_MALICIOUS_IDS` に実データのスナップショットを入れるか、誰が更新するか。
-- **実装時の注意**: 形式が変わる場合は `parseBlocklist()` を差し替え、対応する `test/blocklist.test.ts` を新形式に更新する。取得先 URL の変更は `Non-Negotiables`(新ネットワーク接続先の追加)に該当するため、変更そのものに承認が要る。
+- **旧状態**: `BLOCKLIST_SOURCE_URL`(`nicoleahmed/chrome-mal-ids`)は **HTTP 404**。100点ルールが本番で inert だった。
+- **選定したソース**: [`The-Privacy-Commons-Institute/chrome-mal-ids`](https://github.com/The-Privacy-Commons-Institute/chrome-mal-ids) の `data/current-list.json`。
+  - **権威性の根拠**: 2021年に始まった著名な mallorybowes 系列の正統な後継。The Privacy Commons Institute(TPCI)が運用し、3000+ の Chrome IOC、毎日更新(確認時点で当日 push)、SCHEMA.md / TPCI-V 検証フィールド・STIX・MISP・Sigma など複数フォーマットを公開。CC BY 4.0。
+  - **到達性の検証**: HTTP 200、約 2.1MB(`MAX_BLOCKLIST_BYTES`=5MB 内)、`Access-Control-Allow-Origin: *`(同一ホスト raw.githubusercontent.com なので `host_permissions` 追加不要)。
+  - **形式**: `{ meta, extensions: [{ ext_id, browser, date_added, source, notes, ... }] }`。旧形式(文字列配列)から変わったため `parseBlocklist()` を新スキーマ対応に差し替え、`browser === "edge"` を除外(Chrome スキャナのため chrome + both のみ採用 = 3000件)。実データに対するエンドツーエンド解析も検証済み。
+- **残課題 → F-4 へ**: 単一ソース依存・署名/ハッシュ検証なし・空フォールバックの3点は信頼モデルの設計判断として F-4 に残す。
+
+### F-4: ブロックリストの信頼モデル(提案のみ)
+
+- **現状**: 取得先は権威的ソースに更新済み(Q1)だが、依然として単一の非認証 raw GitHub URL に「Known malicious(100点)」判定を全面依存。整合性チェックなし。`FALLBACK_MALICIOUS_IDS` は空。
+- **設計案**:
+  1. **整合性検証**: TPCI リポジトリはチェックサム類(`data/current-list-meta-chksum.txt` 等)も公開している。取得した JSON のハッシュを併せて取得・照合する仕組みを足すと、改竄・破損を検出できる。
+  2. **多重ソース照合**: 重大判定(100点)は複数ソースで裏取りする、または単一ソースのときは重みを下げる選択肢。
+  3. **フォールバックの実データ化**: CI でビルド時に当日のスナップショットを `FALLBACK_MALICIOUS_IDS` に同梱(誰が更新するか=CI 自動化)。オフライン初回起動でも最低限の検出を効かせる。
+- **判断が要る理由**: 100点=最強シグナルの信頼根拠を上げる設計で、コスト(追加フェッチ・CI 整備)とのトレードオフがあるためオーナー判断。
 
 ### Q2 / A-7: Allowlist / Dismiss のセマンティクス未定義、昇格通知なし
 

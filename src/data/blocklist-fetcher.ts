@@ -58,25 +58,51 @@ export async function refreshBlocklist(): Promise<
 // Reject obviously-wrong responses before they overwrite a good cache.
 const MAX_BLOCKLIST_BYTES = 5_000_000;
 
+/** One entry of the chrome-mal-ids `extensions` array we rely on. */
+interface RawBlocklistEntry {
+  ext_id?: unknown;
+  browser?: unknown;
+  date_added?: unknown;
+  source?: unknown;
+}
+
 /**
- * Parse the remote blocklist payload (a JSON array of extension ID strings)
- * into a Map. Throws on a non-array payload or one with zero valid IDs, so an
- * empty or wrong-shaped response is treated as a failure (preserving the last
- * good cache) rather than a successful empty blocklist (Debt Map A-4).
+ * Parse the chrome-mal-ids `current-list.json` payload into a Map. Shape:
+ * `{ meta: {...}, extensions: [{ ext_id, browser, date_added, source, ... }] }`.
+ * Edge-only IOCs are skipped (they cannot match a Chrome install). Throws on a
+ * payload that is not an object with a non-empty extensions array, so an empty
+ * or wrong-shaped response is treated as a failure (preserving the last good
+ * cache) rather than a successful empty blocklist (Debt Map A-4 / Q1).
  */
 export function parseBlocklist(data: unknown): Map<string, BlocklistEntry> {
-  if (!Array.isArray(data)) {
-    throw new Error("Blocklist response was not a JSON array");
+  if (typeof data !== "object" || data === null) {
+    throw new Error("Blocklist response was not a JSON object");
+  }
+
+  const extensions = (data as { extensions?: unknown }).extensions;
+  if (!Array.isArray(extensions)) {
+    throw new Error("Blocklist response had no extensions array");
   }
 
   const list = new Map<string, BlocklistEntry>();
-  for (const id of data) {
-    if (typeof id === "string" && id.length > 0) {
-      list.set(id, {
-        reason: "Known malicious extension (chrome-mal-ids)",
-        source: "chrome-mal-ids",
-      });
-    }
+  for (const raw of extensions) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const entry = raw as RawBlocklistEntry;
+    const id = entry.ext_id;
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (entry.browser === "edge") continue;
+
+    const dateAdded =
+      typeof entry.date_added === "string" ? entry.date_added : null;
+    list.set(id, {
+      reason: dateAdded
+        ? `Listed in the chrome-mal-ids IOC database (added ${dateAdded})`
+        : "Listed in the chrome-mal-ids IOC database",
+      source:
+        typeof entry.source === "string" && entry.source.length > 0
+          ? entry.source
+          : "chrome-mal-ids (TPCI)",
+    });
   }
 
   if (list.size === 0) {
