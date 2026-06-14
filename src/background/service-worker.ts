@@ -46,7 +46,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await performScan();
   }
   if (alarm.name === "blocklist-update") {
-    await refreshBlocklist();
+    // Propagate the freshly fetched list into the scoring rule and re-evaluate
+    // installed extensions immediately, instead of waiting for the next
+    // periodic scan to pick it up via the cache (Debt Map A-3).
+    const fresh = await refreshBlocklist();
+    setBlocklistData(fresh);
+    await performScan();
   }
 });
 
