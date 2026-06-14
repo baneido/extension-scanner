@@ -1,5 +1,5 @@
 import type { ScanResult, ScoredExtension } from "../shared/types";
-import { timeAgo } from "../shared/utils";
+import { timeAgo, largestIconUrl } from "../shared/utils";
 
 // DOM elements
 const scanTimeEl = document.getElementById("scan-time")!;
@@ -76,8 +76,7 @@ function updateStatusBadge(badgeEl: HTMLElement, count: number): void {
  * Render a single threat item
  */
 function renderThreatItem(ext: ScoredExtension): string {
-  const iconUrl =
-    ext.icons.length > 0 ? ext.icons[ext.icons.length - 1]!.url : "";
+  const iconUrl = largestIconUrl(ext.icons);
   const iconHtml = iconUrl
     ? `<img class="threat-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(ext.name)} icon" />`
     : `<div class="threat-icon"></div>`;

@@ -4,7 +4,7 @@ import type {
   RiskLevel,
   UserPreferences,
 } from "../shared/types";
-import { timeAgo } from "../shared/utils";
+import { timeAgo, largestIconUrl } from "../shared/utils";
 
 // --- State ---
 let currentResult: ScanResult | null = null;
@@ -82,8 +82,7 @@ function render(): void {
 }
 
 function renderExtCard(ext: ScoredExtension): string {
-  const iconUrl =
-    ext.icons.length > 0 ? ext.icons[ext.icons.length - 1]!.url : "";
+  const iconUrl = largestIconUrl(ext.icons);
   const iconHtml = iconUrl
     ? `<img class="ext-icon" src="${escapeHtml(iconUrl)}" alt="" />`
     : `<div class="ext-icon"></div>`;
