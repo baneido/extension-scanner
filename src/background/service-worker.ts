@@ -132,7 +132,23 @@ async function initBlocklist(): Promise<void> {
   setBlocklistData(list);
 }
 
-async function performScan(): Promise<void> {
+let scanInFlight: Promise<void> | null = null;
+
+/**
+ * Run a full scan, coalescing concurrent callers. Overlapping management/alarm
+ * events and the dashboard's post-disable rescan would otherwise launch
+ * parallel scans that race on the saved result and duplicate notifications
+ * (Debt Map A-6). While one scan runs, additional callers join it.
+ */
+function performScan(): Promise<void> {
+  if (scanInFlight) return scanInFlight;
+  scanInFlight = doScan().finally(() => {
+    scanInFlight = null;
+  });
+  return scanInFlight;
+}
+
+async function doScan(): Promise<void> {
   // Always (re)load the blocklist into the scoring rule before scanning. MV3
   // terminates the worker between events, so module state may be empty; without
   // this, scans woken by management on{Enabled,Disabled,Uninstalled} would run
