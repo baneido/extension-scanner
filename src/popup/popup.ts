@@ -3,12 +3,18 @@ import {
   sendExtMessage,
   type ScanResultResponse,
 } from "../shared/messages";
+import { isBlocklisted } from "../scoring/classification";
+import { loadPreferences } from "../storage/store";
 import {
   timeAgo,
   largestIconUrl,
   escapeHtml,
   mustGetElement,
 } from "../shared/utils";
+
+// Extensions the user has allowlisted are hidden from the popup threat list
+// (but a blocklisted extension can never be hidden — Debt Map Q2).
+let allowlist = new Set<string>();
 
 // DOM elements
 const scanTimeEl = mustGetElement("scan-time");
@@ -40,9 +46,12 @@ function renderScanResult(result: ScanResultResponse): void {
   updateStatusBadge(badgeYellowEl, result.summary.yellow);
   updateStatusBadge(badgeGreenEl, result.summary.green);
 
-  // Render threat list (red and yellow only)
+  // Render threat list (red and yellow only), hiding allowlisted extensions
+  // unless they are known malware (which can never be suppressed).
   const threats = result.extensions.filter(
-    (e) => e.riskLevel === "red" || e.riskLevel === "yellow"
+    (e) =>
+      (e.riskLevel === "red" || e.riskLevel === "yellow") &&
+      !(allowlist.has(e.id) && !isBlocklisted(e))
   );
 
   if (threats.length === 0) {
@@ -155,6 +164,12 @@ function setButtonLoading(loading: boolean): void {
 
 // Load initial scan result
 (async () => {
+  try {
+    const prefs = await loadPreferences();
+    allowlist = new Set(prefs.customAllowlist);
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load preferences:", error);
+  }
   try {
     const result = await sendExtMessage({ type: "GET_SCAN_RESULT" });
     renderScanResult(result as ScanResultResponse);
