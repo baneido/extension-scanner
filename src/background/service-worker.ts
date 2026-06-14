@@ -36,6 +36,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 // 2. On browser startup: ensure alarms exist and blocklist is loaded
 chrome.runtime.onStartup.addListener(() =>
   safeRun("onStartup", async () => {
+    await ensureAlarms();
     await initBlocklist();
     await performScan();
   })
@@ -130,6 +131,25 @@ async function safeRun(
 async function initBlocklist(): Promise<void> {
   const list = await getBlocklist();
   setBlocklistData(list);
+}
+
+/**
+ * Recreate the periodic alarms if they are missing (Debt Map A-8). onInstalled
+ * creates them, but they can be lost (e.g. profile restore); this makes the
+ * onStartup "ensure alarms exist" contract real. Idempotent: existing alarms
+ * are left untouched so their schedule is not reset on every startup.
+ */
+async function ensureAlarms(): Promise<void> {
+  if (!(await chrome.alarms.get("periodic-scan"))) {
+    chrome.alarms.create("periodic-scan", {
+      periodInMinutes: SCAN_INTERVAL_MINUTES,
+    });
+  }
+  if (!(await chrome.alarms.get("blocklist-update"))) {
+    chrome.alarms.create("blocklist-update", {
+      periodInMinutes: BLOCKLIST_UPDATE_INTERVAL_MINUTES,
+    });
+  }
 }
 
 let scanInFlight: Promise<void> | null = null;
