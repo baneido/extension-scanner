@@ -35,6 +35,53 @@ export const PERMISSION_WEIGHTS: Record<string, number> = {
   runtime: 0,
   i18n: 0,
   unlimitedStorage: 3,
+
+  // --- Catalog completion (Debt Map F-1) ---
+  // Capture / arbitrary injection (critical)
+  tabCapture: 20,
+  audioCapture: 20,
+  videoCapture: 20,
+  userScripts: 18,
+
+  // Network intercept / system / identity reach (high)
+  declarativeNetRequestWithHostAccess: 15,
+  vpnProvider: 15,
+  privacy: 12,
+  contentSettings: 12,
+  certificateProvider: 12,
+  platformKeys: 12,
+  webAuthenticationProxy: 12,
+  declarativeNetRequestFeedback: 10,
+  processes: 10,
+  loginState: 10,
+
+  // Moderate read/observe (medium)
+  browsingData: 8,
+  systemLog: 7,
+  documentScan: 6,
+  declarativeContent: 5,
+  gcm: 5,
+  printing: 5,
+  printerProvider: 5,
+  printingMetrics: 5,
+
+  // UI / ergonomic, no data-exfil surface (low / zero)
+  search: 4,
+  accessibilityFeatures: 4,
+  sessions: 3,
+  ttsEngine: 2,
+  dns: 2,
+  input: 2,
+  offscreen: 1,
+  tabGroups: 1,
+  readingList: 1,
+  favicon: 1,
+  tts: 1,
+  audio: 1,
+  sidePanel: 0,
+  fontSettings: 0,
+  power: 0,
+  wallpaper: 0,
 };
 
 export interface DangerousCombo {

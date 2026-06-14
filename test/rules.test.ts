@@ -79,7 +79,7 @@ describe("permissionsRule", () => {
     ]);
   });
 
-  it("ignores zero-weight permissions and flags unknown ones at +5", () => {
+  it("ignores zero-weight permissions and flags unknown ones at +3/low (Debt Map F-1)", () => {
     const result = permissionsRule.evaluate(
       makeExt({ permissions: ["storage", "alarms", "somethingNew"] })
     );
@@ -87,11 +87,43 @@ describe("permissionsRule", () => {
       {
         ruleId: "perm-unknown-somethingNew",
         category: "permissions",
-        description: 'Requests unknown permission "somethingNew" (+5)',
-        score: 5,
-        severity: "medium",
+        description: 'Requests unrecognized permission "somethingNew" (+3)',
+        score: 3,
+        severity: "low",
       },
     ]);
+  });
+
+  it("Debt Map F-1: benign modern permissions stay green and do not trigger excessive-scope", () => {
+    const result = permissionsRule.evaluate(
+      makeExt({
+        permissions: [
+          "sidePanel",
+          "offscreen",
+          "tabGroups",
+          "readingList",
+          "sessions",
+          "favicon",
+        ],
+      })
+    );
+    const total = result.reduce((sum, r) => sum + r.score, 0);
+    expect(total).toBeLessThan(30); // would have been 6*5+10=40 (yellow) before
+    expect(result.some((r) => r.ruleId === "perm-excessive-count")).toBe(false);
+  });
+
+  it("Debt Map F-1: dangerous capture/inject permissions are no longer under-scored", () => {
+    for (const [perm, min] of [
+      ["tabCapture", 15],
+      ["userScripts", 15],
+      ["audioCapture", 15],
+    ] as const) {
+      const result = permissionsRule.evaluate(
+        makeExt({ permissions: [perm] })
+      );
+      const finding = result.find((r) => r.ruleId === `perm-${perm}`)!;
+      expect(finding.score).toBeGreaterThanOrEqual(min);
+    }
   });
 
   it("adds an excessive-scope finding at 6+ risky permissions", () => {
