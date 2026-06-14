@@ -1,5 +1,5 @@
 import type { ScanResult, ScoredExtension, RiskLevel } from "../shared/types";
-import { timeAgo, largestIconUrl } from "../shared/utils";
+import { timeAgo, largestIconUrl, escapeHtml } from "../shared/utils";
 import { loadPreferences, updatePreferences } from "../storage/store";
 
 // --- State ---
@@ -149,15 +149,21 @@ function renderExtCard(ext: ScoredExtension): string {
             : `<div class="findings-title">No issues detected</div>`
         }
         <div class="ext-actions">
-          <button class="btn-action" data-action="allowlist" data-ext-id="${ext.id}">
+          <button class="btn-action" data-action="allowlist" data-ext-id="${escapeHtml(
+            ext.id
+          )}">
             Add to Allowlist
           </button>
-          <button class="btn-action" data-action="dismiss" data-ext-id="${ext.id}">
+          <button class="btn-action" data-action="dismiss" data-ext-id="${escapeHtml(
+            ext.id
+          )}">
             Dismiss
           </button>
           ${
             ext.mayDisable && ext.enabled
-              ? `<button class="btn-action danger" data-action="disable" data-ext-id="${ext.id}">
+              ? `<button class="btn-action danger" data-action="disable" data-ext-id="${escapeHtml(
+                  ext.id
+                )}">
               Disable Extension
             </button>`
               : ""
@@ -181,12 +187,6 @@ function getInstallLabel(installType: string): string {
     default:
       return installType;
   }
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 // --- Actions ---

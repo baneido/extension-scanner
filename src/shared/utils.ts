@@ -1,4 +1,20 @@
 /**
+ * Escape a string for safe interpolation into HTML, including inside
+ * double- or single-quoted attribute values. Extension names/ids are
+ * attacker-controlled, so quotes MUST be escaped to prevent attribute
+ * injection (e.g. a name containing a double quote breaking out of an
+ * attribute). Order matters: ampersand first.
+ */
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * Pick the icon URL to display for an extension. Chrome returns icons sorted
  * by ascending size, so the last entry is the largest. Returns "" when none.
  */

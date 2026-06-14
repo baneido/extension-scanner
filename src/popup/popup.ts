@@ -1,5 +1,5 @@
 import type { ScanResult, ScoredExtension } from "../shared/types";
-import { timeAgo, largestIconUrl } from "../shared/utils";
+import { timeAgo, largestIconUrl, escapeHtml } from "../shared/utils";
 
 // DOM elements
 const scanTimeEl = document.getElementById("scan-time")!;
@@ -121,15 +121,6 @@ function addThreatItemHandlers(): void {
       }
     });
   });
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /**
