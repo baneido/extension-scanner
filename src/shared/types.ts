@@ -43,6 +43,8 @@ export interface ScanResult {
     green: number;
   };
   scannedAt: number;
+  // Present on results written by this version onward; absent on legacy data.
+  schemaVersion?: number;
 }
 
 export interface UserPreferences {

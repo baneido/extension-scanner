@@ -6,6 +6,10 @@ export const THRESHOLDS = {
 export const SCAN_INTERVAL_MINUTES = 60;
 export const BLOCKLIST_UPDATE_INTERVAL_MINUTES = 60 * 24; // 24 hours
 
+// Bumped when the persisted ScanResult shape changes incompatibly, so future
+// versions can migrate or discard old data deliberately.
+export const SCAN_RESULT_SCHEMA_VERSION = 1;
+
 export const STORAGE_KEYS = {
   LAST_SCAN: "lastScanResult",
   PREFERENCES: "userPreferences",
