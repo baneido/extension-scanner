@@ -65,11 +65,51 @@ describe("notifyNewThreats", () => {
     expect(createSpy.mock.calls[0][0]).toBe("threat-new1");
   });
 
-  it("does NOT notify when the red extension already existed (A-7: no escalation notice)", async () => {
-    const prev = result([scored({ id: "keep", riskLevel: "yellow" })]);
+  it("Debt Map A-7: notifies an escalation of an existing extension (yellow -> red)", async () => {
+    const prev = result([scored({ id: "keep", riskLevel: "yellow", totalScore: 40 })]);
+    const curr = result([scored({ id: "keep", riskLevel: "red", totalScore: 80 })]);
+    await notifyNewThreats(prev, curr);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy.mock.calls[0][0]).toBe("escalation-keep");
+  });
+
+  it("does NOT re-notify an unchanged existing red extension (fatigue fix)", async () => {
+    const prev = result([scored({ id: "keep", riskLevel: "red" })]);
     const curr = result([scored({ id: "keep", riskLevel: "red" })]);
     await notifyNewThreats(prev, curr);
     expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it("notifies an escalation even when the extension is allowlisted (state changed)", async () => {
+    installChrome({ customAllowlist: ["esc"] });
+    const prev = result([scored({ id: "esc", riskLevel: "yellow", totalScore: 35 })]);
+    const curr = result([scored({ id: "esc", riskLevel: "red", totalScore: 75 })]);
+    await notifyNewThreats(prev, curr);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy.mock.calls[0][0]).toBe("escalation-esc");
+  });
+
+  it("Q2 guardrail: a blocklisted extension notifies even if allowlisted+dismissed", async () => {
+    installChrome({ customAllowlist: ["bad"], dismissedExtensionIds: ["bad"] });
+    const prev = result([]);
+    const curr = result([
+      scored({
+        id: "bad",
+        riskLevel: "red",
+        ruleResults: [
+          {
+            ruleId: "blocklist-match",
+            category: "blocklist",
+            description: "",
+            score: 100,
+            severity: "critical",
+          },
+        ],
+      }),
+    ]);
+    await notifyNewThreats(prev, curr);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy.mock.calls[0][0]).toBe("threat-bad");
   });
 
   it("does not notify for a new yellow extension under default prefs", async () => {
