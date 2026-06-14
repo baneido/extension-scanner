@@ -158,17 +158,28 @@ function setButtonLoading(loading: boolean): void {
 // === Event Listeners ===
 
 // Load initial scan result
-chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" }, (result) => {
-  renderScanResult(result as ScanResult | null);
-});
+(async () => {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" });
+    renderScanResult(result as ScanResult | null);
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load scan result:", error);
+    renderScanResult(null);
+  }
+})();
 
 // Scan Now button
-btnScan.addEventListener("click", () => {
+btnScan.addEventListener("click", async () => {
   setButtonLoading(true);
-  chrome.runtime.sendMessage({ type: "RUN_SCAN" }, (result) => {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "RUN_SCAN" });
     renderScanResult(result as ScanResult | null);
+  } catch (error) {
+    console.error("[ExtScanner] Scan failed:", error);
+    renderScanResult(null);
+  } finally {
     setButtonLoading(false);
-  });
+  }
 });
 
 // Dashboard button

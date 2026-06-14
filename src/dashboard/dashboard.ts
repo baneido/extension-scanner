@@ -239,15 +239,19 @@ searchInput.addEventListener("input", () => {
   render();
 });
 
-btnScan.addEventListener("click", () => {
+btnScan.addEventListener("click", async () => {
   btnScan.disabled = true;
   btnScan.textContent = "Scanning...";
-  chrome.runtime.sendMessage({ type: "RUN_SCAN" }, (result) => {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "RUN_SCAN" });
     currentResult = result as ScanResult | null;
     render();
+  } catch (error) {
+    console.error("[ExtScanner] Scan failed:", error);
+  } finally {
     btnScan.disabled = false;
     btnScan.textContent = "Scan Now";
-  });
+  }
 });
 
 // Preferences
@@ -278,8 +282,14 @@ async function loadPrefs(): Promise<void> {
 }
 
 // --- Init ---
-chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" }, (result) => {
-  currentResult = result as ScanResult | null;
+(async () => {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "GET_SCAN_RESULT" });
+    currentResult = result as ScanResult | null;
+  } catch (error) {
+    console.error("[ExtScanner] Failed to load scan result:", error);
+    currentResult = null;
+  }
   render();
-});
+})();
 loadPrefs();
