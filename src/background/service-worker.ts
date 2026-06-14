@@ -34,41 +34,47 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // 2. On browser startup: ensure alarms exist and blocklist is loaded
-chrome.runtime.onStartup.addListener(async () => {
-  await initBlocklist();
-  await performScan();
-});
-
-// 3. Alarm-based periodic scanning and blocklist updates
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "periodic-scan") {
+chrome.runtime.onStartup.addListener(() =>
+  safeRun("onStartup", async () => {
     await initBlocklist();
     await performScan();
-  }
-  if (alarm.name === "blocklist-update") {
-    // Propagate the freshly fetched list into the scoring rule and re-evaluate
-    // installed extensions immediately, instead of waiting for the next
-    // periodic scan to pick it up via the cache (Debt Map A-3).
-    const fresh = await refreshBlocklist();
-    setBlocklistData(fresh);
-    await performScan();
-  }
-});
+  })
+);
+
+// 3. Alarm-based periodic scanning and blocklist updates
+chrome.alarms.onAlarm.addListener((alarm) =>
+  safeRun(`alarm:${alarm.name}`, async () => {
+    if (alarm.name === "periodic-scan") {
+      await initBlocklist();
+      await performScan();
+    }
+    if (alarm.name === "blocklist-update") {
+      // Propagate the freshly fetched list into the scoring rule and re-evaluate
+      // installed extensions immediately, instead of waiting for the next
+      // periodic scan to pick it up via the cache (Debt Map A-3).
+      const fresh = await refreshBlocklist();
+      setBlocklistData(fresh);
+      await performScan();
+    }
+  })
+);
 
 // 4. React to extension install/uninstall/enable/disable events
-chrome.management.onInstalled.addListener(async () => {
-  await initBlocklist();
-  await performScan();
-});
-chrome.management.onUninstalled.addListener(async () => {
-  await performScan();
-});
-chrome.management.onEnabled.addListener(async () => {
-  await performScan();
-});
-chrome.management.onDisabled.addListener(async () => {
-  await performScan();
-});
+chrome.management.onInstalled.addListener(() =>
+  safeRun("management.onInstalled", async () => {
+    await initBlocklist();
+    await performScan();
+  })
+);
+chrome.management.onUninstalled.addListener(() =>
+  safeRun("management.onUninstalled", () => performScan())
+);
+chrome.management.onEnabled.addListener(() =>
+  safeRun("management.onEnabled", () => performScan())
+);
+chrome.management.onDisabled.addListener(() =>
+  safeRun("management.onDisabled", () => performScan())
+);
 
 // 5. Message handler for popup/dashboard
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -103,6 +109,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // ---- Internal functions ----
+
+/**
+ * Run an async event-handler body, logging any rejection instead of leaving it
+ * as a silent unhandled rejection (Debt Map B-4). Listeners are still
+ * registered synchronously at top level (MV3 requirement); only the body runs
+ * inside this wrapper.
+ */
+async function safeRun(
+  label: string,
+  fn: () => Promise<void>
+): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    console.error(`[ExtScanner] ${label} failed:`, error);
+  }
+}
 
 async function initBlocklist(): Promise<void> {
   const list = await getBlocklist();
