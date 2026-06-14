@@ -1,0 +1,57 @@
+name: Update blocklist snapshot
+
+# Weekly refresh of the committed chrome-mal-ids fallback snapshot so the shipped
+# floor does not go stale (Debt Map F-4). Opens a PR rather than committing to
+# main directly, so the data change is reviewed. Uses only already-pinned
+# actions plus the preinstalled gh CLI (no new third-party dependency).
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh snapshot
+        run: npm run update-blocklist
+
+      - name: Validate
+        run: npm run typecheck && npm test && npm run build
+
+      - name: Open PR if the snapshot changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- src/data/blocklist-snapshot.generated.ts; then
+            echo "Snapshot unchanged; nothing to do."
+            exit 0
+          fi
+          BRANCH="chore/update-blocklist-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add src/data/blocklist-snapshot.generated.ts
+          git commit -m "chore: refresh blocklist fallback snapshot"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "chore: refresh blocklist fallback snapshot" \
+            --body "Automated weekly refresh of the chrome-mal-ids fallback snapshot (Debt Map F-4). Validated by typecheck/test/build in this run." \
+            --base "${{ github.ref_name }}"
