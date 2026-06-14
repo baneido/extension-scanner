@@ -3,18 +3,21 @@ import {
   sendExtMessage,
   type ScanResultResponse,
 } from "../shared/messages";
-import { timeAgo, largestIconUrl, escapeHtml } from "../shared/utils";
+import {
+  timeAgo,
+  largestIconUrl,
+  escapeHtml,
+  mustGetElement,
+} from "../shared/utils";
 
 // DOM elements
-const scanTimeEl = document.getElementById("scan-time")!;
-const badgeRedEl = document.getElementById("badge-red")!;
-const badgeYellowEl = document.getElementById("badge-yellow")!;
-const badgeGreenEl = document.getElementById("badge-green")!;
-const threatsEl = document.getElementById("threats")!;
-const btnScan = document.getElementById("btn-scan") as HTMLButtonElement;
-const btnDashboard = document.getElementById(
-  "btn-dashboard"
-) as HTMLButtonElement;
+const scanTimeEl = mustGetElement("scan-time");
+const badgeRedEl = mustGetElement("badge-red");
+const badgeYellowEl = mustGetElement("badge-yellow");
+const badgeGreenEl = mustGetElement("badge-green");
+const threatsEl = mustGetElement("threats");
+const btnScan = mustGetElement<HTMLButtonElement>("btn-scan");
+const btnDashboard = mustGetElement<HTMLButtonElement>("btn-dashboard");
 
 /**
  * Render scan results to the popup UI

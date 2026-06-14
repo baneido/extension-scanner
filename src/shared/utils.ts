@@ -15,6 +15,22 @@ export function escapeHtml(str: string): string {
 }
 
 /**
+ * Get a required DOM element by id, throwing a self-describing error if it is
+ * absent. Replaces scattered `getElementById(id)!` / `as HTMLElement` casts,
+ * which are erased at build and surface a missing element as an opaque later
+ * null-deref. Fail-fast on our own static HTML fixtures (Debt Map B-7).
+ */
+export function mustGetElement<T extends HTMLElement = HTMLElement>(
+  id: string
+): T {
+  const el = document.getElementById(id);
+  if (el === null) {
+    throw new Error(`Missing required DOM element: #${id}`);
+  }
+  return el as T;
+}
+
+/**
  * Pick the icon URL to display for an extension. Chrome returns icons sorted
  * by ascending size, so the last entry is the largest. Returns "" when none.
  */

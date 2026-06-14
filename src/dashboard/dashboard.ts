@@ -1,6 +1,11 @@
 import type { ScanResult, ScoredExtension, RiskLevel } from "../shared/types";
 import { sendExtMessage } from "../shared/messages";
-import { timeAgo, largestIconUrl, escapeHtml } from "../shared/utils";
+import {
+  timeAgo,
+  largestIconUrl,
+  escapeHtml,
+  mustGetElement,
+} from "../shared/utils";
 import { loadPreferences, updatePreferences } from "../storage/store";
 
 // --- State ---
@@ -9,25 +14,19 @@ let currentFilter: "all" | RiskLevel = "all";
 let searchQuery = "";
 
 // --- DOM Elements ---
-const scanTimeEl = document.getElementById("scan-time")!;
-const countTotal = document.getElementById("count-total")!;
-const countRed = document.getElementById("count-red")!;
-const countYellow = document.getElementById("count-yellow")!;
-const countGreen = document.getElementById("count-green")!;
-const listEl = document.getElementById("extensions-list")!;
-const loadingEl = document.getElementById("loading")!;
-const btnScan = document.getElementById("btn-scan") as HTMLButtonElement;
-const searchInput = document.getElementById(
-  "search-input"
-) as HTMLInputElement;
+const scanTimeEl = mustGetElement("scan-time");
+const countTotal = mustGetElement("count-total");
+const countRed = mustGetElement("count-red");
+const countYellow = mustGetElement("count-yellow");
+const countGreen = mustGetElement("count-green");
+const listEl = mustGetElement("extensions-list");
+const loadingEl = mustGetElement("loading");
+const btnScan = mustGetElement<HTMLButtonElement>("btn-scan");
+const searchInput = mustGetElement<HTMLInputElement>("search-input");
 const filterBtns = document.querySelectorAll<HTMLButtonElement>(".filter-btn");
 
-const prefNotifyRed = document.getElementById(
-  "pref-notify-red"
-) as HTMLInputElement;
-const prefNotifyYellow = document.getElementById(
-  "pref-notify-yellow"
-) as HTMLInputElement;
+const prefNotifyRed = mustGetElement<HTMLInputElement>("pref-notify-red");
+const prefNotifyYellow = mustGetElement<HTMLInputElement>("pref-notify-yellow");
 
 // --- Rendering ---
 function render(): void {
