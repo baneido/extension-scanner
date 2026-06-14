@@ -22,11 +22,19 @@ export async function getBlocklistStatus(): Promise<BlocklistStatus> {
   return { ...DEFAULT_STATUS, ...(raw ?? {}) };
 }
 
-async function recordStatus(patch: Partial<BlocklistStatus>): Promise<void> {
-  const current = await getBlocklistStatus();
-  await chrome.storage.local.set({
-    [STORAGE_KEYS.BLOCKLIST_STATUS]: { ...current, ...patch },
+// Serialize status writes through a single chain so concurrent read-modify-write
+// calls (e.g. an overlapping periodic-scan and blocklist-update on the same
+// alarm tick) cannot clobber each other's fields.
+let statusWriteChain: Promise<void> = Promise.resolve();
+
+function recordStatus(patch: Partial<BlocklistStatus>): Promise<void> {
+  statusWriteChain = statusWriteChain.then(async () => {
+    const current = await getBlocklistStatus();
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.BLOCKLIST_STATUS]: { ...current, ...patch },
+    });
   });
+  return statusWriteChain;
 }
 
 /**
