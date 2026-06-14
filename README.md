@@ -88,7 +88,7 @@ The full dashboard provides:
 - Individual risk scores and findings
 - Detailed breakdown of triggered rules
 - Extension metadata (version, permissions, install type)
-- Quick actions to disable or remove risky extensions
+- Quick actions to disable, dismiss, or allowlist risky extensions
 
 #### Keyboard Shortcuts
 
@@ -104,10 +104,10 @@ Each extension is evaluated against multiple rules:
 | Rule Category | Max Score | Examples |
 |--------------|-----------|----------|
 | Blocklist | 100 | Known malicious extension ID |
-| Permissions | Variable | `cookies` (15pts), `webRequest` (20pts) |
-| Host Permissions | Variable | `<all_urls>` (20pts), `*://*/*` (15pts) |
-| Install Type | 20 | Unpacked/development installation |
-| Metadata | Variable | Missing description (5pts), no homepage (3pts) |
+| Permissions | Variable | `cookies` (15pts), `webRequest` (15pts) |
+| Host Permissions | Variable | `<all_urls>` / `*://*/*` (25pts), sensitive domain (8pts each) |
+| Install Type | 25 | Sideloaded (25pts), developer mode (15pts) |
+| Metadata | Variable | Missing description (5pts), no homepage (5pts) |
 
 **Risk Thresholds:**
 - Red (High Risk): ≥70 points
@@ -285,7 +285,7 @@ Extension Scannerは、インストールされているChrome拡張機能を分
 - 個別のリスクスコアと検出結果
 - トリガーされたルールの詳細な内訳
 - 拡張機能のメタデータ（バージョン、権限、インストールタイプ）
-- リスクのある拡張機能を無効化または削除するクイックアクション
+- リスクのある拡張機能を無効化・除外・許可リスト登録するクイックアクション
 
 #### キーボードショートカット
 
@@ -301,10 +301,10 @@ Extension Scannerは、インストールされているChrome拡張機能を分
 | ルールカテゴリ | 最大スコア | 例 |
 |--------------|-----------|---------|
 | ブロックリスト | 100 | 既知の悪意のある拡張機能ID |
-| 権限 | 可変 | `cookies` (15点), `webRequest` (20点) |
-| ホスト権限 | 可変 | `<all_urls>` (20点), `*://*/*` (15点) |
-| インストールタイプ | 20 | 未パッケージ/開発版インストール |
-| メタデータ | 可変 | 説明文なし (5点), ホームページなし (3点) |
+| 権限 | 可変 | `cookies` (15点), `webRequest` (15点) |
+| ホスト権限 | 可変 | `<all_urls>` / `*://*/*` (25点), 機微なドメイン (各8点) |
+| インストールタイプ | 25 | サイドロード (25点), 開発版 (15点) |
+| メタデータ | 可変 | 説明文なし (5点), ホームページなし (5点) |
 
 **リスク閾値:**
 - 赤（高リスク）: ≥70点
