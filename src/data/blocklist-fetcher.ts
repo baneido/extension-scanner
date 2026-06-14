@@ -22,8 +22,13 @@ export async function getBlocklist(): Promise<
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
     return freshList;
-  } catch {
-    // Network error - use cache if available, otherwise fallback
+  } catch (error) {
+    // Network/parse error - use cache if available, otherwise fallback.
+    // Logged (not swallowed) so a persistently failing source is visible.
+    console.warn(
+      "[ExtScanner] Blocklist fetch failed; using cache/fallback:",
+      error
+    );
     if (cached) return cached.list;
     return FALLBACK_MALICIOUS_IDS;
   }
@@ -39,7 +44,11 @@ export async function refreshBlocklist(): Promise<
     const freshList = await fetchRemoteBlocklist();
     await saveCachedBlocklist(freshList);
     return freshList;
-  } catch {
+  } catch (error) {
+    console.warn(
+      "[ExtScanner] Blocklist refresh failed; using cache/fallback:",
+      error
+    );
     const cached = await loadCachedBlocklist();
     if (cached) return cached.list;
     return FALLBACK_MALICIOUS_IDS;
