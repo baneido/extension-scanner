@@ -109,6 +109,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
+// 6. Open the dashboard when a threat notification is clicked. The notification
+// body invites the user to "Click to review", so honor it (Debt Map B-6).
+chrome.notifications.onClicked.addListener((notificationId) => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
+  void chrome.notifications.clear(notificationId).catch(() => {});
+});
+
 // ---- Internal functions ----
 
 /**
